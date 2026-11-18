@@ -23,6 +23,7 @@ from starlette.background import BackgroundTask
 from .backup import copy_database, daily_copies, save_daily_copy
 from .context import (REFRESH_SECONDS, collect_feeds, evaluate, load_events, missing_providers,
                       parse_time, read_event, stamp)
+from .exports import export_signals
 from .journal import (ExitInput, JournalError, JournalFilters, TradeInput, add_trade, csv_export,
                       initialize_journal, journal_rows, record_exit, summary)
 from .overview import overview
@@ -351,6 +352,19 @@ def dashboard(request: APIRequest, response: Response, symbol: str = "XAUUSD"):
         "watchlist": watchlist,
         "signals": [dict(json.loads(row["payload"]), id=row["id"], telegram=row["telegram"]) for row in rows],
     }
+
+
+@app.get("/api/signals/export.csv", dependencies=[Depends(access)])
+def signal_csv(request: APIRequest, symbol: str = "XAUUSD", days: int = Query(7, ge=1, le=90),
+               side: Literal["all", "actionable", "BUY", "SELL", "WAIT"] = "all"):
+    symbol = symbol_or_422(symbol)
+    now = datetime.now(UTC).replace(microsecond=0)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with closing(connect(request.app.state.config.database)) as db:
+        content = export_signals(db, symbol, stamp(today - timedelta(days=days - 1)), stamp(now), side)
+    return Response(content, media_type="text/csv", headers={
+        "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="signals-{symbol}-{days}d.csv"',
+    })
 
 
 def journal_filters(status: Literal["all", "open", "closed"] = "all", side: Literal["all", "BUY", "SELL"] = "all",

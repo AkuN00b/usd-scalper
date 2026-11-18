@@ -5,9 +5,12 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 import json
 import sqlite3
+import csv
+import io
 
 from scalper.backup import copy_database, daily_copies, save_daily_copy
 from scalper.context import stamp
+from scalper.exports import export_signals
 from scalper.journal import ExitInput, TradeInput, add_trade, record_exit
 from scalper.overview import feed_activity, overview
 from scalper.server import connect, initialize
@@ -50,6 +53,11 @@ class OverviewTests(TestCase):
         self.assertEqual(journal["totals"], {"closed": 2, "win_rate": 1, "total_r": 2, "net": {"EUR": 8, "USD": 8}})
         self.assertEqual([week["monday"] for week in journal["weeks"]], ["2025-01-20", "2025-01-13"])
         self.assertEqual(journal["symbols"][1]["mean_slippage"], 0.5)
+        sessions = {(session["symbol"], session["start_hour"]): session for session in journal["sessions"]}
+        self.assertEqual(sessions[("", 6)]["closed"], 1)
+        self.assertIsNone(sessions[("", 6)]["mean_slippage"])
+        self.assertEqual(sessions[("XAUUSD", 6)]["mean_slippage"], 0.5)
+        self.assertEqual(sessions[("EURUSD", 12)]["total_r"], 1)
         self.assertEqual(result["telegram"], {"sent": 1})
         self.assertEqual(result["signals"][1]["WAIT"], 0)
         self.assertEqual(result["signals"][1]["latest"], stamp(old))
@@ -85,3 +93,22 @@ class OverviewTests(TestCase):
         save_daily_copy(self.path, NOW + timedelta(days=7))
         self.assertEqual(daily_copies(self.path), newest)
         self.assertTrue(destination.is_file())
+
+    def test_signal_csv_filters_symbol_time_and_side_without_display_limit(self):
+        start = NOW - timedelta(hours=6)
+        with closing(connect(self.path)) as db, db:
+            for index in range(65):
+                stamp_at = stamp(start + timedelta(minutes=index * 3))
+                db.execute("INSERT INTO signals(symbol, closed, payload, telegram) VALUES (?, ?, ?, ?)", (
+                    "XAUUSD", stamp_at, json.dumps({"side": "BUY", "reasons": [" =1+1"], "reference_price": 99}), "off",
+                ))
+            db.executemany("INSERT INTO signals(symbol, closed, payload, telegram) VALUES (?, ?, ?, ?)", (
+                ("XAUUSD", stamp(NOW), json.dumps({"side": "WAIT"}), "off"),
+                ("XAUUSD", stamp(start - timedelta(minutes=3)), json.dumps({"side": "SELL"}), "sent"),
+                ("EURUSD", stamp(NOW), json.dumps({"side": "BUY"}), "off"),
+            ))
+            data = export_signals(db, "XAUUSD", stamp(start), stamp(NOW), "actionable")
+            result = list(csv.DictReader(io.StringIO(data)))
+        self.assertEqual(len(result), 65)
+        self.assertEqual(result[0]["reasons"], "' =1+1")
+        self.assertEqual(result[-1]["closed_at_utc"], stamp(start))

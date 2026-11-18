@@ -27,10 +27,10 @@ Untuk perintah backtest dan pengujian di bawah, jalankan `python` dari virtual e
 
 ### Pakai dashboard
 
-- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi. Gunakan **Lihat → Tinjau sinyal** di riwayat untuk menelusuri keputusan sesuai filter.
-- **Ringkasan.** Review 7, 30, atau 90 hari UTC untuk semua instrumen dalam satu halaman. Lihat aktivitas sinyal, trade yang ditutup per minggu, P/L bersih per mata uang, selisih fill per instrumen, kesehatan feed, status Telegram, dan backup SQLite.
+- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi. Gunakan **Lihat → Tinjau sinyal** untuk menelusuri keputusan, atau **Ekspor sinyal CSV** untuk mengunduh riwayat 7, 30, atau 90 hari UTC sesuai instrumen dan filter sinyal.
+- **Ringkasan.** Review 7, 30, atau 90 hari UTC untuk semua instrumen dalam satu halaman. Lihat trade yang ditutup per minggu, P/L bersih per mata uang, selisih fill per instrumen, kesehatan feed, status Telegram, dan backup SQLite. Tabel **Jurnal menurut jam entry UTC** mengelompokkan trade yang ditutup dalam periode terpilih berdasarkan jam entry. Pilih satu instrumen untuk melihat selisih fill rata-rata dalam satuan harganya.
 - **Tampilan.** Pilih tema terang, gelap, atau sesuai sistem. Lo juga bisa mengubah aksen warna, merapatkan tabel, dan menyembunyikan kalender. Pilihan tersebut, instrumen terakhir, dan watchlist disimpan per browser dan alamat dashboard.
-- **Backtest.** Pilih contoh XAUUSD atau EURUSD, atau gunakan **Buka report.json**. **Bandingkan dengan laporan lain** menambahkan tabel metrik serta garis kedua pada grafik R kumulatif. Grafik memakai urutan transaksi masing-masing laporan. Filter sisi dan pemicu exit berlaku pada tabel transaksi utama. File pilihan dibaca di browser.
+- **Backtest.** Pilih contoh XAUUSD atau EURUSD, atau gunakan **Buka report.json**. **Bandingkan dengan laporan lain** menambahkan tabel metrik serta garis kedua pada grafik R kumulatif atau drawdown. Klik salah satu jam entry UTC, atau gabungkan filter jam dengan sisi dan pemicu exit. Statistik filter dan **Ekspor hasil filter** mengikuti transaksi yang cocok di seluruh halaman. File pilihan dibaca dan diekspor dari browser.
 - **Jurnal trade.** Catat fill, lot, dan biaya aktual. Filter status, sisi, dan tanggal entry UTC berlaku untuk tabel, ringkasan, serta CSV per instrumen.
 
 ## Hubungkan TradingView
@@ -82,6 +82,8 @@ Data tick Exness untuk 2–8 Januari 2025 UTC, delay entry 1 detik, spread bid/a
 | EURUSD | 129 | 36,4% | −31,73 R | 42,43 R | [CSV](examples/backtests/eurusd/trades.csv) · [JSON](examples/backtests/eurusd/report.json) |
 
 Keduanya rugi pada periode ini. Slippage simulasi per eksekusi 0,02 untuk XAUUSD dan 0,00001 untuk EURUSD.
+
+Grafik **Drawdown** menunjukkan selisih R kumulatif dari puncak yang sudah tercapai pada urutan trade yang sama. Grafik dan tabel perbandingan memakai seluruh laporan. Analisis jam entry memakai empat kelompok enam jam UTC dengan batas awal inklusif dan batas akhir eksklusif.
 
 ## Logika sinyal dan sumber
 

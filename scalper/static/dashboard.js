@@ -4,6 +4,7 @@ const byId = (id) => document.getElementById(id);
 const symbol = byId("symbol");
 const dialog = byId("token-dialog");
 const tokenKey = "usd-scalper-token";
+const entryHours = [0, 6, 12, 18];
 const instruments = {
   XAUUSD: ["Emas", "Emas / Dolar AS"], EURUSD: ["Euro", "Euro / Dolar AS"],
   GBPUSD: ["Pound", "Pound Inggris / Dolar AS"], USDJPY: ["Yen", "Dolar AS / Yen Jepang"],
@@ -28,6 +29,7 @@ let contextEvents = [];
 let reviewSignals = [];
 let reviewIndex = 0;
 let activeRequest;
+let signalExport;
 let lastSnapshot = "";
 let activeTab = "live";
 
@@ -48,6 +50,10 @@ function time(value) {
 
 function numeric(value, digits = 6) {
   return Number.isFinite(value) ? value.toLocaleString("id-ID", { maximumFractionDigits: digits }) : "—";
+}
+
+function entryHoursLabel(start) {
+  return String(start).padStart(2, "0") + ":00–" + String(start + 6).padStart(2, "0") + ":00";
 }
 
 function setText(id, text) {
@@ -301,6 +307,10 @@ function connection(text, state = "") {
 
 function setToken(value) {
   token = value;
+  signalExport?.abort();
+  byId("signal-export").disabled = false;
+  byId("signal-export").hidden = byId("signal-export-range").hidden = !token;
+  setText("signal-export-status", "");
   window.systemOverview?.clear();
   closeSignalReview();
   watchlistData = {};
@@ -400,6 +410,31 @@ byId("favorite").addEventListener("click", () => {
 });
 symbol.addEventListener("change", selectInstrument);
 byId("signal-filter").addEventListener("change", history);
+byId("signal-export").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  if (!token || button.disabled) return;
+  const controller = new AbortController();
+  signalExport = controller;
+  button.disabled = true;
+  setText("signal-export-status", "Menyiapkan CSV…");
+  const params = { symbol: symbol.value, days: byId("signal-export-days").value, side: byId("signal-filter").value };
+  try {
+    const response = await fetch("/api/signals/export.csv?" + new URLSearchParams(params), {
+      headers: { Authorization: "Bearer " + token },
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]), cache: "no-store",
+    });
+    if (response.status === 404) throw new Error("Mulai ulang Uvicorn setelah pembaruan untuk mengekspor sinyal.");
+    if (!response.ok) throw new Error("Ekspor sinyal gagal.");
+    const csv = await response.blob();
+    if (controller.signal.aborted) return;
+    downloadBlob(csv, "signals-" + params.symbol + "-" + params.days + "d.csv");
+    setText("signal-export-status", "CSV " + params.symbol + " siap disimpan.");
+  } catch (error) {
+    if (!controller.signal.aborted) setText("signal-export-status", error.message);
+  } finally {
+    if (signalExport === controller) button.disabled = false;
+  }
+});
 byId("signal-review-older").addEventListener("click", () => {
   reviewIndex += 1;
   showReviewedSignal();

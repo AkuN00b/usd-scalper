@@ -3,9 +3,11 @@
 window.systemOverview = (() => {
   const days = byId("overview-days");
   const backup = byId("overview-backup");
-  const resultTables = ["weeks", "instruments", "signals", "feeds"];
+  const sessionSymbol = byId("overview-session-symbol");
+  const resultTables = ["weeks", "instruments", "sessions", "signals", "feeds"];
   let pending;
   let download;
+  let sessions = [];
   let savedDays;
   try {
     savedDays = localStorage.getItem("usd-scalper-overview-days");
@@ -13,11 +15,13 @@ window.systemOverview = (() => {
     // Keep the default period when browser storage is unavailable.
   }
   if (["7", "30", "90"].includes(savedDays)) days.value = savedDays;
+  Object.keys(instruments).forEach((name) => sessionSymbol.add(new Option(name)));
 
   function clear(message = "Buka akses dashboard untuk melihat ringkasan.") {
     pending?.abort();
     download?.abort();
     backup.disabled = false;
+    sessions = [];
     days.disabled = !token;
     byId("overview-panels").hidden = true;
     for (const id of [...resultTables, "totals", "telegram"]) byId("overview-" + id).replaceChildren();
@@ -82,6 +86,18 @@ window.systemOverview = (() => {
       return row(linkedInstrument(item.symbol, "journal"), item.closed, percentage(item.win_rate), signed(item.total_r), slippage);
     });
     byId("overview-instruments").replaceChildren(...(symbols.length ? symbols : [emptyRow(5, "Belum ada trade yang ditutup dalam periode ini.")]));
+    sessions = journal.sessions ?? [];
+    renderSessions();
+  }
+
+  function renderSessions() {
+    const filtered = sessions.filter((session) => session.symbol === sessionSymbol.value);
+    const rows = entryHours.map((start) => {
+      const item = filtered.find((session) => session.start_hour === start);
+      const slippage = item?.slippage_count ? numeric(item.mean_slippage, 8) + " · " + item.slippage_count + " fill" : "—";
+      return row(entryHoursLabel(start), item?.closed ?? 0, percentage(item?.win_rate), signed(item?.total_r), slippage);
+    });
+    byId("overview-sessions").replaceChildren(...rows);
   }
 
   function statusCell(feed) {
@@ -176,5 +192,6 @@ window.systemOverview = (() => {
     }
     refresh();
   });
+  sessionSymbol.addEventListener("change", renderSessions);
   return { clear, refresh };
 })();

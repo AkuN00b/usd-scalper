@@ -17,13 +17,14 @@
 - Jurnal lokal mencatat fill, lot, SL/TP awal, P/L broker, biaya, mata uang, dan catatan. Tautan ke sinyal menambahkan selisih harga fill jika referensinya tersedia. Filter status, sisi, dan tanggal entry UTC berlaku pada ringkasan dan CSV. P/L bersih dijumlahkan per mata uang.
 - Dashboard menyimpan tema, aksen, tampilan ringkas, instrumen aktif, dan watchlist per browser. Watchlist menampilkan keputusan terakhir dan status feed wajib. Grafik pantauan memakai harga referensi sinyal. Tab Backtest membandingkan dua laporan dengan grafik R kumulatif, profit factor, dan rata-rata R per transaksi.
 - Tab Ringkasan menampilkan aktivitas 7, 30, atau 90 hari, review trade per minggu UTC, diagnosis feed, status Telegram, dan unduhan backup SQLite. Backup otomatis dapat diaktifkan dengan `AUTO_BACKUP=1` dan menyimpan tujuh salinan harian terakhir.
+- Backtest punya mode drawdown dan analisis empat kelompok jam entry UTC. Jurnal di Ringkasan memakai kelompok jam yang sama. Ekspor backtest mengikuti filter tabel. Ekspor sinyal berdasarkan instrumen, rentang UTC, dan sisi.
 
 ## Usulan urutan berikutnya
 
 Gunakan [NEXT_STEPS.md](NEXT_STEPS.md) untuk prioritas dan kriteria selesai tiap pekerjaan.
 
 1. Bandingkan strategi awal dengan varian dalam beberapa periode terpisah, beserta asumsi spread, slippage, jam trading, dan drawdown. Simpan setiap versi agar hasilnya bisa ditelusuri.
-2. Tambahkan tape replay dari data tick dan review jurnal per sesi untuk membandingkan harga sinyal dengan fill aktual.
+2. Tambahkan tape replay dari data tick dan pasangkan hasil historis dengan fill aktual menurut kelompok jam.
 3. Perluas kalender FOMC, ECB, dan event relevan lain, lalu bandingkan efek filter berita hanya ketika waktu ketersediaan berita historis bisa dibuktikan.
 4. Tambahkan ringkasan Telegram harian dan filter spread berdasarkan data broker yang tersedia.
 

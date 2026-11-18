@@ -41,6 +41,8 @@ Restart server setelah mengubah `.env`. Simpan file tersebut secara lokal. Cadan
 5. Saat pasar aktif, tunggu candle M3 berikutnya tutup dan lihat **Webhook status** di log alert TradingView. Di dashboard, pilih simbol yang sama dan lihat **Riwayat sinyal** dengan filter **Semua** supaya keputusan WAIT juga terlihat. Ulangi proses per simbol yang mau dipantau.
 6. Periksa masa aktif alert. Buat ulang alert kalau skrip, simbol, timeframe, atau token diubah. Ubah juga URL alert jika alamat tunnel berubah. [Cara TradingView menyimpan snapshot alert](https://www.tradingview.com/pine-script-docs/faq/alerts/#if-i-change-my-script-does-my-alert-change)
 
+Untuk audit setelah uji, pilih instrumen serta filter BUY, SELL, WAIT, atau BUY/SELL di riwayat. Pilih periode lalu klik **Ekspor sinyal CSV** untuk mengambil semua keputusan yang cocok dalam periode, termasuk yang berada di luar 50 baris terbaru.
+
 ### Contoh tunnel sementara
 
 Dengan Uvicorn lokal masih berjalan, pasang `cloudflared` lalu buka PowerShell kedua:
@@ -106,6 +108,8 @@ for chat_id in chat_ids:
 ## 5. Backtest dari data sendiri
 
 Siapkan simbol, periode, data harga, dan asumsi biaya. Pilih arsip tick Exness untuk bid/ask historis, atau CSV M1/M3 dari MT5 dengan zona waktu sumber dan spread. Setelah CLI selesai, buka `report.json` di dashboard. Gunakan **Bandingkan dengan laporan lain** untuk membandingkan hasil dan grafik dengan contoh atau file kedua. CSV konteks historis opsional memerlukan waktu event dan waktu ketika informasinya tersedia. [Perintah backtest dan format laporan](README.md#backtest-dengan-tick-exness)
+
+Gunakan **Drawdown** untuk melihat penurunan dari puncak menurut urutan trade. Di **Transaksi**, gabungkan filter sisi, pemicu exit, dan jam entry UTC, lalu gunakan **Ekspor hasil filter** untuk membawa semua baris yang cocok ke spreadsheet.
 
 ## 6. Backup dan uji pemulihan
 

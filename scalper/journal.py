@@ -8,6 +8,7 @@ import json
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .context import parse_time
+from .exports import csv_cell
 from .strategy import canonical_symbol
 
 Price = Annotated[float, Field(ge=0.000000001, le=1_000_000_000)]
@@ -252,7 +253,6 @@ def csv_export(rows) -> str:
     for trade in rows:
         row = {**trade, "signal_reasons": " ".join(trade["signal_reasons"])}
         for field in ("notes", "exit_notes", "signal_reasons"):
-            if row[field].lstrip().startswith(("=", "+", "-", "@")):
-                row[field] = "'" + row[field]
+            row[field] = csv_cell(row[field])
         writer.writerow(row)
     return file.getvalue()

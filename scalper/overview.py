@@ -15,7 +15,7 @@ def signal_activity(db, since: datetime, now: datetime) -> tuple[list, dict]:
     for row in db.execute(
         """SELECT symbol, json_extract(payload, '$.side') AS side, telegram, count(*) AS total
            FROM signals WHERE closed >= ? AND closed <= ? GROUP BY symbol, side, telegram""",
-        (stamp(since), stamp(now)),
+        (stamp(since), stamp(now.replace(microsecond=0))),
     ):
         side = row["side"]
         if row["symbol"] in slots and side in {"BUY", "SELL", "WAIT"}:
@@ -34,6 +34,7 @@ def journal_activity(db, since: datetime, now: datetime) -> dict:
     weeks = defaultdict(Counter)
     week_net = defaultdict(Counter)
     instruments = defaultdict(Counter)
+    sessions = defaultdict(Counter)
     totals = Counter()
     total_net = Counter()
     for row in db.execute(
@@ -44,16 +45,20 @@ def journal_activity(db, since: datetime, now: datetime) -> dict:
         day = parse_time(trade["exited_at"]).date()
         week_date = (day - timedelta(days=day.weekday())).isoformat()
         week = weeks[week_date]
-        instrument = instruments[trade["symbol"]]
-        for period in (week, instrument, totals):
+        symbol = trade["symbol"]
+        instrument = instruments[symbol]
+        start_hour = parse_time(trade["opened_at"]).astimezone(UTC).hour // 6 * 6
+        symbol_session = sessions[(symbol, start_hour)]
+        for period in (week, instrument, totals, sessions[("", start_hour)], symbol_session):
             period["closed"] += 1
             period["wins"] += trade["gross_price_move"] > 0
             if trade["gross_r"] is not None:
                 period["r_count"] += 1
                 period["total_r"] += trade["gross_r"]
         if trade["entry_slippage_price"] is not None:
-            instrument["slippage_count"] += 1
-            instrument["total_slippage"] += trade["entry_slippage_price"]
+            for period in (instrument, symbol_session):
+                period["slippage_count"] += 1
+                period["total_slippage"] += trade["entry_slippage_price"]
         if trade["net_pnl"] is not None:
             week_net[week_date][trade["pnl_currency"]] += trade["net_pnl"]
             total_net[trade["pnl_currency"]] += trade["net_pnl"]
@@ -65,6 +70,10 @@ def journal_activity(db, since: datetime, now: datetime) -> dict:
             "total_r": values["total_r"] if values["r_count"] else None,
         }
 
+    def with_slippage(values: Counter) -> dict:
+        count = values["slippage_count"]
+        return dict(rollup(values), slippage_count=count, mean_slippage=values["total_slippage"] / count if count else None)
+
     return {
         "open": open_positions,
         "totals": dict(rollup(totals), net=dict(sorted(total_net.items()))),
@@ -73,10 +82,11 @@ def journal_activity(db, since: datetime, now: datetime) -> dict:
             for week, stats in sorted(weeks.items(), reverse=True)
         ],
         "symbols": [
-            dict(rollup(stats), symbol=symbol, mean_slippage=(
-                stats["total_slippage"] / stats["slippage_count"] if stats["slippage_count"] else None
-            ), slippage_count=stats["slippage_count"])
-            for symbol, stats in sorted(instruments.items())
+            dict(with_slippage(stats), symbol=symbol) for symbol, stats in sorted(instruments.items())
+        ],
+        "sessions": [
+            dict(with_slippage(stats), symbol=symbol, start_hour=start_hour)
+            for (symbol, start_hour), stats in sorted(sessions.items())
         ],
     }
 

@@ -93,9 +93,18 @@
       </div>
       <div class="grid lower" id="signal-panels">
         <section class="panel">
-          <div class="panel-header"><h2>Riwayat sinyal</h2><label class="filter-control">Sinyal
-            <select id="signal-filter"><option value="all">Semua</option><option value="actionable">BUY / SELL</option><option>BUY</option><option>SELL</option><option>WAIT</option></select>
-          </label></div>
+          <div class="panel-header"><h2>Riwayat sinyal</h2>
+            <div class="report-controls">
+              <label class="filter-control">Sinyal
+                <select id="signal-filter"><option value="all">Semua</option><option value="actionable">BUY / SELL</option><option>BUY</option><option>SELL</option><option>WAIT</option></select>
+              </label>
+              <label id="signal-export-range" class="filter-control" hidden>Periode CSV
+                <select id="signal-export-days"><option value="7">7 hari</option><option value="30">30 hari</option><option value="90">90 hari</option></select>
+              </label>
+              <button id="signal-export" type="button" hidden>Ekspor sinyal CSV</button>
+            </div>
+          </div>
+          <p id="signal-export-status" class="section-status muted" role="status"></p>
           <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel riwayat sinyal">
             <table>
               <thead><tr><th scope="col">Tutup M3 · UTC</th><th scope="col">Sinyal</th><th scope="col">Skor</th><th scope="col">Referensi</th><th scope="col">Telegram</th><th scope="col">Alasan</th></tr></thead>
@@ -141,6 +150,17 @@
             <table>
               <thead><tr><th scope="col">Instrumen</th><th scope="col">Trade ditutup</th><th scope="col">Win rate bruto</th><th scope="col">R bruto</th><th scope="col">Rata-rata selisih fill</th></tr></thead>
               <tbody id="overview-instruments"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Jurnal menurut jam entry UTC</h2>
+            <label class="filter-control">Instrumen <select id="overview-session-symbol"><option value="">Semua</option></select></label>
+          </div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Hasil jurnal menurut jam entry">
+            <table>
+              <thead><tr><th scope="col">Jam entry</th><th scope="col">Trade ditutup</th><th scope="col">Win rate bruto</th><th scope="col">R bruto</th><th scope="col">Selisih fill rata-rata</th></tr></thead>
+              <tbody id="overview-sessions"></tbody>
             </table>
           </div>
         </section>
@@ -201,9 +221,24 @@
           </div>
         </details>
         <section id="equity-view" class="equity-view" hidden>
-          <div class="panel-header"><h2>Akumulasi hasil</h2><span class="muted">R per urutan trade</span></div>
+          <div class="panel-header"><h2>Grafik hasil</h2>
+            <div class="segmented" aria-label="Tipe grafik">
+              <button id="chart-equity-mode" type="button" aria-pressed="true">R kumulatif</button>
+              <button id="chart-drawdown-mode" type="button" aria-pressed="false">Drawdown</button>
+            </div>
+          </div>
           <canvas id="equity-chart" role="img" aria-label="Grafik R kumulatif. Hasil per trade tersedia di tabel."></canvas>
+          <p id="equity-note" class="chart-note muted">R kumulatif per urutan trade.</p>
           <p id="equity-legend" class="chart-note muted" hidden><span class="legend-a">A · Utama</span><span class="legend-b">B · Pembanding</span></p>
+        </section>
+        <section id="report-time-view" hidden>
+          <div class="panel-header"><h2>Hasil menurut jam entry UTC</h2><span class="muted">Laporan utama · seluruh trade</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Hasil backtest menurut jam entry">
+            <table>
+              <thead><tr><th scope="col">Jam entry</th><th scope="col">Trade</th><th scope="col">Win rate</th><th scope="col">Total R</th><th scope="col">R per trade</th></tr></thead>
+              <tbody id="report-time-rows"></tbody>
+            </table>
+          </div>
         </section>
         <div id="report-filters" class="panel-header" hidden>
           <h2>Transaksi</h2>
@@ -211,8 +246,11 @@
             <span id="report-match" class="muted" aria-live="polite"></span>
             <label class="filter-control">Sisi <select id="report-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
             <label class="filter-control">Exit <select id="report-exit"><option value="">Semua</option></select></label>
+            <label class="filter-control">Jam entry UTC <select id="report-time"><option value="">Semua</option></select></label>
+            <button id="report-export" type="button">Ekspor hasil filter</button>
           </div>
         </div>
+        <div id="report-filter-stats" class="report-summary" aria-label="Statistik hasil filter" hidden></div>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel transaksi backtest">
           <table>
             <thead><tr><th scope="col">Sisi</th><th scope="col">Sinyal · UTC</th><th scope="col">Entry · UTC</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Pemicu exit</th><th scope="col">Hasil · R</th></tr></thead>
