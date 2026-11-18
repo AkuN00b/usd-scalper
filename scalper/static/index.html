@@ -4,38 +4,77 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>USD Scalper</title>
+  <meta name="theme-color" content="#f4f6fa">
   <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/preferences.js"></script>
+  <script src="/static/charts.js" defer></script>
   <script src="/static/dashboard.js" defer></script>
   <script src="/static/journal.js" defer></script>
+  <script src="/static/backtest.js" defer></script>
+  <script src="/static/overview.js" defer></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span> USD Scalper</a>
-    <div class="top-controls">
-      <label class="symbol-control">Instrumen
-        <select id="symbol">
-          <option>XAUUSD</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
-          <option>USDCHF</option><option>USDCAD</option><option>AUDUSD</option><option>NZDUSD</option>
-        </select>
-      </label>
-      <button id="access" type="button">Akses data</button>
-    </div>
-  </header>
-  <main>
-    <div class="page-header">
-      <div><p class="kicker">M15 arah <span>·</span> M3 keputusan</p><h1 id="market-title">XAUUSD</h1></div>
-      <p id="connection" class="connection" role="status">Akses data diperlukan</p>
-    </div>
-    <nav class="tabs" aria-label="Tampilan">
-      <button id="live-tab" type="button" aria-controls="live" aria-pressed="true">Pantauan market</button>
-      <button id="backtest-tab" type="button" aria-controls="backtest" aria-pressed="false">Backtest</button>
-      <button id="journal-tab" type="button" aria-controls="journal" aria-pressed="false">Jurnal trade</button>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>USD Scalper</a>
+    <nav class="tabs" aria-label="Navigasi utama">
+      <button id="live-tab" type="button" aria-controls="live" aria-pressed="true"><span class="nav-icon" aria-hidden="true">◫</span>Pantauan market</button>
+      <button id="overview-tab" type="button" aria-controls="overview" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▦</span>Ringkasan</button>
+      <button id="backtest-tab" type="button" aria-controls="backtest" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◈</span>Backtest</button>
+      <button id="journal-tab" type="button" aria-controls="journal" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▤</span>Jurnal trade</button>
     </nav>
+    <div class="sidebar-foot">
+      <button id="customize" type="button"><span class="nav-icon" aria-hidden="true">⚙</span>Tampilan</button>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="top">
+      <div class="top-controls">
+        <label id="instrument-control" class="symbol-control">Instrumen
+          <select id="symbol">
+            <option>XAUUSD</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+            <option>USDCHF</option><option>USDCAD</option><option>AUDUSD</option><option>NZDUSD</option>
+          </select>
+        </label>
+      </div>
+      <div class="top-controls">
+        <button id="refresh" type="button" aria-label="Segarkan data" title="Segarkan data" hidden>↻</button>
+        <button id="access" class="primary" type="button">Akses data</button>
+      </div>
+    </header>
+    <main>
+      <div class="page-header">
+        <div><h1 id="page-title">Pantauan market</h1><p id="page-description" class="muted">Arah M15 · Keputusan M3</p></div>
+        <p id="connection" class="connection" role="status">Akses data diperlukan</p>
+      </div>
     <section id="live">
+      <div class="watchlist">
+        <div class="watchlist-head">
+          <h2>Watchlist</h2>
+          <button id="favorite" type="button" aria-pressed="true"><span aria-hidden="true">★</span> Favorit</button>
+        </div>
+        <div id="watchlist-items" class="watchlist-items" aria-label="Instrumen favorit"></div>
+      </div>
       <div class="grid">
         <section class="panel chart">
-          <div class="panel-header"><h2>Chart TradingView</h2><a id="chart-link" class="muted" target="_blank" rel="noopener noreferrer">Buka di TradingView</a></div>
-          <iframe id="chart" title="Chart TradingView M3" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+          <div class="panel-header chart-header">
+            <div><h2 id="market-title">XAUUSD</h2><p id="market-name" class="muted">Emas / Dolar AS</p></div>
+            <div class="segmented" aria-label="Sumber chart">
+              <button id="signal-chart-tab" type="button" aria-controls="signal-chart-view" aria-pressed="true">Harga sinyal</button>
+              <button id="tradingview-tab" type="button" aria-controls="tradingview-view" aria-pressed="false">TradingView</button>
+            </div>
+          </div>
+          <div id="signal-chart-view" class="chart-view">
+            <div id="chart-empty" class="chart-empty">
+              <div class="empty-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+              <p id="chart-empty-text">Buka akses untuk melihat harga sinyal.</p>
+            </div>
+            <canvas id="signal-chart" role="img" aria-label="Grafik harga referensi sinyal M3. Nilai dapat dibaca di riwayat sinyal." hidden></canvas>
+            <p class="chart-note muted">Harga referensi saat candle M3 tutup · UTC</p>
+          </div>
+          <div id="tradingview-view" hidden>
+            <iframe id="chart" title="Chart referensi TradingView M3" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            <a id="chart-link" class="chart-note" target="_blank" rel="noopener noreferrer">Buka chart OANDA di TradingView ↗</a>
+          </div>
         </section>
         <section class="panel latest">
           <div class="panel-header"><h2>Keputusan terakhir</h2><time id="signal-time" class="muted"></time></div>
@@ -52,20 +91,105 @@
           </div>
         </section>
       </div>
-      <div class="grid lower">
+      <div class="grid lower" id="signal-panels">
         <section class="panel">
-          <div class="panel-header"><h2>Riwayat sinyal</h2><label class="checkbox"><input id="actionable" type="checkbox"> BUY / SELL saja</label></div>
-          <div class="table-wrap">
+          <div class="panel-header"><h2>Riwayat sinyal</h2>
+            <div class="report-controls">
+              <label class="filter-control">Sinyal
+                <select id="signal-filter"><option value="all">Semua</option><option value="actionable">BUY / SELL</option><option>BUY</option><option>SELL</option><option>WAIT</option></select>
+              </label>
+              <label id="signal-export-range" class="filter-control" hidden>Periode CSV
+                <select id="signal-export-days"><option value="7">7 hari</option><option value="30">30 hari</option><option value="90">90 hari</option></select>
+              </label>
+              <button id="signal-export" type="button" hidden>Ekspor sinyal CSV</button>
+            </div>
+          </div>
+          <p id="signal-export-status" class="section-status muted" role="status"></p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel riwayat sinyal">
             <table>
-              <thead><tr><th scope="col">Tutup M3 · UTC</th><th scope="col">Sinyal</th><th scope="col">Skor</th><th scope="col">Telegram</th><th scope="col">Alasan</th></tr></thead>
-              <tbody id="history"><tr><td colspan="5">Belum ada data.</td></tr></tbody>
+              <thead><tr><th scope="col">Tutup M3 · UTC</th><th scope="col">Sinyal</th><th scope="col">Skor</th><th scope="col">Referensi</th><th scope="col">Telegram</th><th scope="col">Alasan</th></tr></thead>
+              <tbody id="history"><tr><td colspan="6">Belum ada data.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel" id="context-panel">
+          <div class="panel-header"><h2>Kalender dan berita</h2>
+            <label class="filter-control">Jenis <select id="event-filter">
+              <option value="all">Semua</option><option value="scheduled">Agenda</option><option value="news">Berita</option><option value="high">Dampak tinggi</option>
+            </select></label>
+          </div>
+          <ul id="feeds" class="feeds"></ul>
+          <ul id="events" class="events"><li class="muted">Belum ada data.</li></ul>
+        </section>
+      </div>
+    </section>
+    <section id="overview" hidden>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Aktivitas semua instrumen</h2>
+          <label class="filter-control">Periode
+            <select id="overview-days"><option value="7">7 hari</option><option value="30">30 hari</option><option value="90">90 hari</option></select>
+          </label>
+        </div>
+        <p id="overview-status" class="section-status muted" role="status">Buka akses dashboard untuk melihat ringkasan.</p>
+        <div id="overview-totals" class="report-summary" aria-label="Total aktivitas"></div>
+      </section>
+      <div id="overview-panels" class="overview-panels" hidden>
+        <section class="panel">
+          <div class="panel-header"><h2>Ringkasan mingguan</h2><span class="muted">Minggu mulai Senin · UTC</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel ringkasan mingguan">
+            <table>
+              <thead><tr><th scope="col">Minggu mulai</th><th scope="col">Trade ditutup</th><th scope="col">Win rate bruto</th><th scope="col">R bruto</th><th scope="col">P/L bersih</th></tr></thead>
+              <tbody id="overview-weeks"></tbody>
             </table>
           </div>
         </section>
         <section class="panel">
-          <div class="panel-header"><h2>Kalender dan berita</h2></div>
-          <ul id="feeds" class="feeds"></ul>
-          <ul id="events" class="events"><li class="muted">Belum ada data.</li></ul>
+          <div class="panel-header"><h2>Hasil jurnal per instrumen</h2><span class="muted">Berdasarkan tanggal exit</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel jurnal per instrumen">
+            <table>
+              <thead><tr><th scope="col">Instrumen</th><th scope="col">Trade ditutup</th><th scope="col">Win rate bruto</th><th scope="col">R bruto</th><th scope="col">Rata-rata selisih fill</th></tr></thead>
+              <tbody id="overview-instruments"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Jurnal menurut jam entry UTC</h2>
+            <label class="filter-control">Instrumen <select id="overview-session-symbol"><option value="">Semua</option></select></label>
+          </div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Hasil jurnal menurut jam entry">
+            <table>
+              <thead><tr><th scope="col">Jam entry</th><th scope="col">Trade ditutup</th><th scope="col">Win rate bruto</th><th scope="col">R bruto</th><th scope="col">Selisih fill rata-rata</th></tr></thead>
+              <tbody id="overview-sessions"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Aktivitas sinyal</h2><span class="muted">Waktu candle · UTC</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel aktivitas sinyal">
+            <table>
+              <thead><tr><th scope="col">Instrumen</th><th scope="col">Candle terakhir</th><th scope="col">BUY</th><th scope="col">SELL</th><th scope="col">WAIT</th></tr></thead>
+              <tbody id="overview-signals"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Kesehatan feed publik</h2><span class="muted">UTC</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel kesehatan feed">
+            <table>
+              <thead><tr><th scope="col">Sumber</th><th scope="col">Status</th><th scope="col">Terakhir berhasil</th><th scope="col">Percobaan terakhir</th></tr></thead>
+              <tbody id="overview-feeds"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Pengiriman Telegram</h2><span id="overview-telegram-state" class="muted"></span></div>
+          <div id="overview-telegram" class="report-summary"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Backup data</h2><button id="overview-backup" type="button">Unduh backup SQLite</button></div>
+          <p id="overview-backup-config" class="section-status muted"></p>
+          <p id="overview-backup-status" class="section-status muted" role="status"></p>
         </section>
       </div>
     </section>
@@ -73,14 +197,70 @@
       <section class="panel">
         <div class="panel-header">
           <h2>Hasil backtest</h2>
-          <label class="file-picker">Buka report.json <input id="report-file" type="file" accept=".json,application/json"></label>
+          <div class="report-controls">
+            <label class="filter-control">Contoh
+              <select id="report-example"><option value="">Pilih instrumen</option><option>XAUUSD</option><option>EURUSD</option></select>
+            </label>
+            <label class="file-picker">Buka report.json <input id="report-file" type="file" accept=".json,application/json" aria-label="Buka report.json"></label>
+          </div>
         </div>
-        <div id="report-summary" class="report-summary" role="status">Pilih report.json dari hasil backtest.</div>
-        <div class="table-wrap">
+        <p id="report-status" class="section-status muted" role="status">Pilih contoh atau buka laporan hasil backtest.</p>
+        <div id="report-summary" class="report-summary"></div>
+        <details id="report-compare" class="report-compare" hidden>
+          <summary>Bandingkan dengan laporan lain</summary>
+          <div class="report-controls">
+            <label class="filter-control">Contoh pembanding
+              <select id="compare-example"><option value="">Pilih instrumen</option><option>XAUUSD</option><option>EURUSD</option></select>
+            </label>
+            <label class="file-picker">Buka file pembanding <input id="compare-file" type="file" accept=".json,application/json" aria-label="Buka file pembanding"></label>
+            <button id="compare-clear" type="button" hidden>Hapus pembanding</button>
+          </div>
+          <p id="compare-status" class="muted" role="status"></p>
+          <div id="compare-table" class="table-wrap" tabindex="0" role="region" aria-label="Tabel perbandingan backtest" hidden>
+            <table><thead><tr><th scope="col">Metrik</th><th scope="col">A · Utama</th><th scope="col">B · Pembanding</th></tr></thead><tbody id="compare-rows"></tbody></table>
+          </div>
+        </details>
+        <section id="equity-view" class="equity-view" hidden>
+          <div class="panel-header"><h2>Grafik hasil</h2>
+            <div class="segmented" aria-label="Tipe grafik">
+              <button id="chart-equity-mode" type="button" aria-pressed="true">R kumulatif</button>
+              <button id="chart-drawdown-mode" type="button" aria-pressed="false">Drawdown</button>
+            </div>
+          </div>
+          <canvas id="equity-chart" role="img" aria-label="Grafik R kumulatif. Hasil per trade tersedia di tabel."></canvas>
+          <p id="equity-note" class="chart-note muted">R kumulatif per urutan trade.</p>
+          <p id="equity-legend" class="chart-note muted" hidden><span class="legend-a">A · Utama</span><span class="legend-b">B · Pembanding</span></p>
+        </section>
+        <section id="report-time-view" hidden>
+          <div class="panel-header"><h2>Hasil menurut jam entry UTC</h2><span class="muted">Laporan utama · seluruh trade</span></div>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Hasil backtest menurut jam entry">
+            <table>
+              <thead><tr><th scope="col">Jam entry</th><th scope="col">Trade</th><th scope="col">Win rate</th><th scope="col">Total R</th><th scope="col">R per trade</th></tr></thead>
+              <tbody id="report-time-rows"></tbody>
+            </table>
+          </div>
+        </section>
+        <div id="report-filters" class="panel-header" hidden>
+          <h2>Transaksi</h2>
+          <div class="report-controls">
+            <span id="report-match" class="muted" aria-live="polite"></span>
+            <label class="filter-control">Sisi <select id="report-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
+            <label class="filter-control">Exit <select id="report-exit"><option value="">Semua</option></select></label>
+            <label class="filter-control">Jam entry UTC <select id="report-time"><option value="">Semua</option></select></label>
+            <button id="report-export" type="button">Ekspor hasil filter</button>
+          </div>
+        </div>
+        <div id="report-filter-stats" class="report-summary" aria-label="Statistik hasil filter" hidden></div>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel transaksi backtest">
           <table>
             <thead><tr><th scope="col">Sisi</th><th scope="col">Sinyal · UTC</th><th scope="col">Entry · UTC</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Pemicu exit</th><th scope="col">Hasil · R</th></tr></thead>
             <tbody id="trades"><tr><td colspan="7">Belum ada laporan.</td></tr></tbody>
           </table>
+        </div>
+        <div class="pagination" id="report-pages" hidden>
+          <button id="report-prev" type="button">Sebelumnya</button>
+          <span id="report-page" class="muted" aria-live="polite"></span>
+          <button id="report-next" type="button">Berikutnya</button>
         </div>
       </section>
     </section>
@@ -93,28 +273,68 @@
             <button id="journal-new" class="primary" type="button">Catat entry</button>
           </div>
         </div>
+        <form id="journal-filters" class="panel-header journal-filters" aria-label="Filter jurnal" hidden>
+          <label class="filter-control">Status <select id="journal-state"><option value="all">Semua</option><option value="open">Terbuka</option><option value="closed">Ditutup</option></select></label>
+          <label class="filter-control">Sisi <select id="journal-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
+          <label class="filter-control">Entry sejak (UTC) <input id="journal-start" type="date"></label>
+          <label class="filter-control">Entry sampai (UTC) <input id="journal-end" type="date"></label>
+          <button type="submit">Terapkan</button>
+          <button id="journal-reset" type="reset">Reset</button>
+        </form>
         <div id="journal-summary" class="report-summary" aria-label="Ringkasan jurnal"></div>
-        <p id="journal-status" class="journal-status muted" role="status">Buka akses dashboard untuk melihat jurnal.</p>
-        <div class="table-wrap">
+        <p id="journal-status" class="section-status muted" role="status">Buka akses dashboard untuk melihat jurnal.</p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel jurnal transaksi">
           <table>
-            <thead><tr><th scope="col">Entry · UTC</th><th scope="col">Sisi</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Harga exit</th><th scope="col">R bruto</th><th scope="col">Catatan</th><th scope="col">Aksi</th></tr></thead>
-            <tbody id="journal-rows"><tr><td colspan="8">Belum ada trade.</td></tr></tbody>
+            <thead><tr><th scope="col">Entry · UTC</th><th scope="col">Sisi</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Harga exit</th><th scope="col">R bruto</th><th scope="col">P/L bersih</th><th scope="col">Catatan</th><th scope="col">Aksi</th></tr></thead>
+            <tbody id="journal-rows"><tr><td colspan="9">Belum ada trade.</td></tr></tbody>
           </table>
         </div>
-        <div class="journal-pages" id="journal-pages" hidden>
+        <div class="pagination" id="journal-pages" hidden>
           <button id="journal-prev" type="button">Sebelumnya</button>
           <span id="journal-page" class="muted" aria-live="polite"></span>
           <button id="journal-next" type="button">Berikutnya</button>
         </div>
       </section>
     </section>
-  </main>
-  <dialog id="token-dialog">
+    </main>
+  </div>
+  <dialog id="signal-review-dialog" aria-labelledby="signal-review-title">
+    <form method="dialog">
+      <h2 id="signal-review-title">Tinjau keputusan M3</h2>
+      <p id="signal-review-info" class="muted"></p>
+      <div id="signal-review-levels" class="report-summary" aria-label="Level harga keputusan"></div>
+      <ul id="signal-review-reasons" class="reasons"></ul>
+      <div class="dialog-actions">
+        <button id="signal-review-older" type="button">Lebih lama</button>
+        <button id="signal-review-newer" type="button">Lebih baru</button>
+        <button class="primary" type="submit">Tutup</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="appearance-dialog" aria-labelledby="appearance-title">
+    <form method="dialog" id="appearance-form">
+      <h2 id="appearance-title">Tampilan dashboard</h2>
+      <div class="form-grid">
+        <label>Tema
+          <select id="theme"><option value="light">Terang</option><option value="dark">Gelap</option><option value="system">Ikuti sistem</option></select>
+        </label>
+        <label>Aksen warna
+          <select id="accent"><option value="violet">Ungu</option><option value="blue">Biru</option><option value="teal">Teal</option></select>
+        </label>
+      </div>
+      <label class="setting-check"><input id="compact" type="checkbox"> Tampilan ringkas</label>
+      <label class="setting-check"><input id="show-context" type="checkbox"> Tampilkan kalender dan berita</label>
+      <p class="muted">Preferensi disimpan di browser ini.</p>
+      <div class="dialog-actions"><button id="reset-preferences" type="button">Pulihkan default</button><button class="primary" type="submit">Selesai</button></div>
+    </form>
+  </dialog>
+  <dialog id="token-dialog" aria-labelledby="token-title">
     <form id="token-form">
-      <h2>Akses dashboard</h2>
+      <h2 id="token-title">Akses dashboard</h2>
+      <p class="muted">Gunakan DASHBOARD_TOKEN dari file .env.</p>
       <label for="dashboard-token">Token dashboard</label>
       <input id="dashboard-token" type="password" autocomplete="current-password" required>
-      <div class="dialog-actions"><button id="cancel" type="button">Batal</button><button class="primary" type="submit">Buka</button></div>
+      <div class="dialog-actions"><button id="lock" type="button" hidden>Kunci data</button><button id="cancel" type="button">Batal</button><button class="primary" type="submit">Buka</button></div>
     </form>
   </dialog>
   <dialog id="entry-dialog" aria-labelledby="entry-title">
@@ -126,7 +346,10 @@
         <label>Sisi<select id="entry-side"><option>BUY</option><option>SELL</option></select></label>
       </div>
       <label>Waktu entry <span class="form-zone muted"></span><input id="entry-at" type="datetime-local" step="1" required></label>
-      <label>Harga entry aktual<input id="entry-price" type="number" step="any" min="0" required></label>
+      <div class="form-grid">
+        <label>Harga entry aktual<input id="entry-price" type="number" step="any" min="0" required></label>
+        <label>Lot <small>(opsional)</small><input id="entry-lots" type="number" step="any" min="0.000000001" max="1000000"></label>
+      </div>
       <div class="form-grid">
         <label>SL awal <small>(opsional)</small><input id="entry-stop" type="number" step="any" min="0"></label>
         <label>TP awal <small>(opsional)</small><input id="entry-target" type="number" step="any" min="0"></label>
@@ -142,6 +365,15 @@
       <p id="exit-trade" class="muted"></p>
       <label>Waktu exit <span class="form-zone muted"></span><input id="exit-at" type="datetime-local" step="1" required></label>
       <label>Harga exit aktual<input id="exit-price" type="number" step="any" min="0" required></label>
+      <details class="exit-costs">
+        <summary>Hasil broker dan biaya (opsional)</summary>
+        <div class="form-grid">
+          <label>P/L sebelum biaya<input id="exit-gross" type="number" step="any"></label>
+          <label>Total biaya<input id="exit-costs" type="number" step="any"></label>
+        </div>
+        <label>Mata uang akun<input id="exit-currency" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" placeholder="USD"></label>
+        <p class="muted">Masukkan potongan sebagai biaya positif, kredit sebagai negatif, atau 0 jika tanpa biaya.</p>
+      </details>
       <label>Catatan exit <small>(opsional)</small><textarea id="exit-notes" rows="2" maxlength="2000"></textarea></label>
       <p id="exit-error" class="form-error sell" role="alert"></p>
       <div class="dialog-actions"><button id="exit-cancel" type="button">Batal</button><button class="primary" type="submit">Simpan exit</button></div>

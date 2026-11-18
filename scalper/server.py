@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager, closing, suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Literal
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import asyncio
@@ -16,14 +18,19 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request as A
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from starlette.background import BackgroundTask
 
+from .backup import copy_database, daily_copies, save_daily_copy
 from .context import (REFRESH_SECONDS, collect_feeds, evaluate, load_events, missing_providers,
                       parse_time, read_event, stamp)
-from .journal import (ExitInput, JournalError, TradeInput, add_trade, csv_export,
+from .exports import export_signals
+from .journal import (ExitInput, JournalError, JournalFilters, TradeInput, add_trade, csv_export,
                       initialize_journal, journal_rows, record_exit, summary)
+from .overview import overview
 from .strategy import Features, canonical_symbol, technical, SYMBOLS
 
 STATIC = Path(__file__).with_name("static")
+BACKTEST_EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "backtests"
 
 
 @dataclass(frozen=True)
@@ -35,6 +42,7 @@ class Config:
     context_csv: Path | None
     telegram_token: str
     telegram_chat_id: str
+    auto_backup: bool = False
 
     @classmethod
     def load(cls):
@@ -51,7 +59,7 @@ class Config:
             raise RuntimeError("Format TELEGRAM_BOT_TOKEN tidak valid.")
         return cls(webhook, dashboard, Path(os.getenv("DB_PATH", "data/scalper.sqlite3")),
                    os.getenv("ENABLE_PUBLIC_FEEDS", "1") == "1", Path(context) if context else None,
-                   telegram_token, telegram_chat_id)
+                   telegram_token, telegram_chat_id, os.getenv("AUTO_BACKUP", "0") == "1")
 
 
 class AlertFeatures(BaseModel):
@@ -117,6 +125,7 @@ def initialize(path):
                 id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, closed TEXT NOT NULL,
                 payload TEXT NOT NULL, telegram TEXT NOT NULL, UNIQUE(symbol, closed)
             );
+            CREATE INDEX IF NOT EXISTS signals_closed ON signals(closed);
             CREATE TABLE IF NOT EXISTS feeds (
                 name TEXT PRIMARY KEY, last_attempt TEXT NOT NULL,
                 success TEXT, error TEXT NOT NULL, events TEXT NOT NULL
@@ -203,17 +212,29 @@ async def recurring(work, delay):
         await asyncio.sleep(delay)
 
 
+def run_backup(app):
+    try:
+        save_daily_copy(app.state.config.database, datetime.now(UTC))
+        app.state.backup_error = False
+    except (OSError, sqlite3.Error) as error:
+        app.state.backup_error = True
+        print(f"Backup SQLite gagal: {type(error).__name__}", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app):
     config = Config.load()
     initialize(config.database)
     app.state.config = config
     app.state.manual_events = load_events(config.context_csv) if config.context_csv else ()
+    app.state.backup_error = False
     tasks = []
     if config.public_feeds:
         tasks.append(asyncio.create_task(recurring(partial(update_feeds, config.database), REFRESH_SECONDS)))
     if config.telegram_token:
         tasks.append(asyncio.create_task(recurring(partial(notify_telegram, config), 3)))
+    if config.auto_backup:
+        tasks.append(asyncio.create_task(recurring(partial(run_backup, app), 900)))
     try:
         yield
     finally:
@@ -239,9 +260,53 @@ def index():
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/backtest/examples/{symbol}")
+def backtest_example(symbol: str):
+    if symbol not in {"XAUUSD", "EURUSD"}:
+        raise HTTPException(404, "Contoh backtest tidak tersedia.")
+    path = BACKTEST_EXAMPLES / symbol.lower() / "report.json"
+    if not path.is_file():
+        raise HTTPException(404, "Contoh backtest tidak tersedia.")
+    return FileResponse(path, media_type="application/json")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/overview", dependencies=[Depends(access)])
+def dashboard_overview(request: APIRequest, response: Response, days: int = Query(7, ge=1, le=90)):
+    response.headers["Cache-Control"] = "no-store"
+    config = request.app.state.config
+    with closing(connect(config.database)) as db, db:
+        db.execute("BEGIN")
+        data = overview(db, days, datetime.now(UTC), public_feeds=config.public_feeds,
+                        telegram_enabled=bool(config.telegram_token))
+    backups = {"enabled": config.auto_backup, "latest": None, "error": request.app.state.backup_error}
+    try:
+        files = daily_copies(config.database)
+        if files:
+            backups["latest"] = stamp(datetime.fromtimestamp(files[0].stat().st_mtime, UTC))
+    except OSError:
+        backups["error"] = True
+    return dict(data, backups=backups)
+
+
+@app.get("/api/maintenance/backup", dependencies=[Depends(access)])
+def download_backup(request: APIRequest):
+    folder = TemporaryDirectory(prefix="usd-scalper-backup-")
+    filename = f"usd-scalper-{datetime.now(UTC):%Y%m%d-%H%M%S}-utc.sqlite3"
+    path = Path(folder.name) / filename
+    try:
+        copy_database(request.app.state.config.database, path)
+    except (OSError, sqlite3.Error):
+        folder.cleanup()
+        raise HTTPException(503, "Backup SQLite gagal dibuat. Coba lagi.") from None
+    return FileResponse(
+        path, filename=filename, media_type="application/vnd.sqlite3",
+        headers={"Cache-Control": "no-store"}, background=BackgroundTask(folder.cleanup),
+    )
 
 
 def symbol_or_422(symbol: str) -> str:
@@ -270,34 +335,65 @@ def dashboard(request: APIRequest, response: Response, symbol: str = "XAUUSD"):
         rows = db.execute(
             "SELECT id, payload, telegram FROM signals WHERE symbol=? ORDER BY closed DESC LIMIT 50", (symbol,)
         ).fetchall()
+        watchlist = {}
+        for name in SYMBOLS:
+            last = rows[0] if rows and name == symbol else db.execute(
+                "SELECT payload FROM signals WHERE symbol=? ORDER BY closed DESC LIMIT 1", (name,)
+            ).fetchone()
+            signal = json.loads(last["payload"]) if last else {}
+            watchlist[name] = {
+                key: signal.get(key) for key in ("side", "closed_at_utc", "reference_price")
+            } | {"missing": missing_providers(providers, name, now) if config.public_feeds else []}
     return {
         "symbols": SYMBOLS, "symbol": symbol, "feeds": providers,
         "feed_status": "public" if config.public_feeds else "technical_with_optional_csv",
         "missing": missing_providers(providers, symbol, now) if config.public_feeds else [],
         "events": timeline[:20],
+        "watchlist": watchlist,
         "signals": [dict(json.loads(row["payload"]), id=row["id"], telegram=row["telegram"]) for row in rows],
     }
 
 
+@app.get("/api/signals/export.csv", dependencies=[Depends(access)])
+def signal_csv(request: APIRequest, symbol: str = "XAUUSD", days: int = Query(7, ge=1, le=90),
+               side: Literal["all", "actionable", "BUY", "SELL", "WAIT"] = "all"):
+    symbol = symbol_or_422(symbol)
+    now = datetime.now(UTC).replace(microsecond=0)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    with closing(connect(request.app.state.config.database)) as db:
+        content = export_signals(db, symbol, stamp(today - timedelta(days=days - 1)), stamp(now), side)
+    return Response(content, media_type="text/csv", headers={
+        "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="signals-{symbol}-{days}d.csv"',
+    })
+
+
+def journal_filters(status: Literal["all", "open", "closed"] = "all", side: Literal["all", "BUY", "SELL"] = "all",
+                    start: date | None = None, end: date | None = None) -> JournalFilters:
+    if start is not None and end is not None and start > end:
+        raise HTTPException(422, "Tanggal awal harus sebelum atau sama dengan tanggal akhir.")
+    return JournalFilters(status, side, start, end)
+
+
 @app.get("/api/journal", dependencies=[Depends(access)])
-def journal(request: APIRequest, response: Response, symbol: str = "XAUUSD", page: int = Query(1, ge=1)):
+def journal(request: APIRequest, response: Response, symbol: str = "XAUUSD", page: int = Query(1, ge=1),
+            filters: JournalFilters = Depends(journal_filters)):
     symbol = symbol_or_422(symbol)
     response.headers["Cache-Control"] = "no-store"
     with closing(connect(request.app.state.config.database)) as db, db:
         db.execute("BEGIN")
-        stats = summary(db, symbol)
+        stats = summary(db, symbol, filters)
         page_size = 100
         pages = max(1, (stats["total"] + page_size - 1) // page_size)
         page = min(page, pages)
-        trades = list(journal_rows(db, symbol, page_size, (page - 1) * page_size))
+        trades = list(journal_rows(db, symbol, page_size, (page - 1) * page_size, filters))
         return {"symbol": symbol, "summary": stats, "trades": trades, "page": page, "pages": pages}
 
 
 @app.get("/api/journal/export.csv", dependencies=[Depends(access)])
-def export_journal(request: APIRequest, symbol: str = "XAUUSD"):
+def export_journal(request: APIRequest, symbol: str = "XAUUSD", filters: JournalFilters = Depends(journal_filters)):
     symbol = symbol_or_422(symbol)
     with closing(connect(request.app.state.config.database)) as db:
-        content = csv_export(journal_rows(db, symbol))
+        content = csv_export(journal_rows(db, symbol, filters=filters))
     return Response(content, media_type="text/csv", headers={
         "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="journal-{symbol}.csv"',
     })

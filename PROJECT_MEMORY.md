@@ -14,12 +14,17 @@
 - Strategi awal menggunakan EMA M15/M3, breakout, RSI, dan ATR. Skor minimal 85. SL 1,2 ATR, target 1,5 kali jarak SL, dan batas simulasi 30 menit.
 - Kalender BLS dan feed Fed, ECB, UN News menjadi sumber dasar. GDELT opsional sempat merespons 503 saat uji. Berita berdampak tinggi merupakan filter entry, tanpa klasifikasi arah oleh model AI.
 - Backtest teknikal dengan tick Exness 2–8 Januari 2025 UTC memakai delay satu detik, komisi nol, dan slippage 0,02 XAUUSD atau 0,00001 EURUSD. XAUUSD mencatat 123 trade dengan −7,21 R. EURUSD mencatat 129 trade dengan −31,73 R. Keduanya rugi pada sampel ini. [Ringkasan dan laporan](README.md#hasil-uji-yang-disertakan)
-- Jurnal lokal mencatat harga dan waktu entry/exit aktual, rencana SL/TP yang diisi pengguna, catatan, dan tautan opsional ke keputusan TradingView. Riwayat tersimpan di SQLite dan dapat diekspor per instrumen.
+- Jurnal lokal mencatat fill, lot, SL/TP awal, P/L broker, biaya, mata uang, dan catatan. Tautan ke sinyal menambahkan selisih harga fill jika referensinya tersedia. Filter status, sisi, dan tanggal entry UTC berlaku pada ringkasan dan CSV. P/L bersih dijumlahkan per mata uang.
+- Dashboard menyimpan tema, aksen, tampilan ringkas, instrumen aktif, dan watchlist per browser. Watchlist menampilkan keputusan terakhir dan status feed wajib. Grafik pantauan memakai harga referensi sinyal. Tab Backtest membandingkan dua laporan dengan grafik R kumulatif, profit factor, dan rata-rata R per transaksi.
+- Tab Ringkasan menampilkan aktivitas 7, 30, atau 90 hari, review trade per minggu UTC, diagnosis feed, status Telegram, dan unduhan backup SQLite. Backup otomatis dapat diaktifkan dengan `AUTO_BACKUP=1` dan menyimpan tujuh salinan harian terakhir.
+- Backtest punya mode drawdown dan analisis empat kelompok jam entry UTC. Jurnal di Ringkasan memakai kelompok jam yang sama. Ekspor backtest mengikuti filter tabel. Ekspor sinyal berdasarkan instrumen, rentang UTC, dan sisi.
 
 ## Usulan urutan berikutnya
 
+Gunakan [NEXT_STEPS.md](NEXT_STEPS.md) untuk prioritas dan kriteria selesai tiap pekerjaan.
+
 1. Bandingkan strategi awal dengan varian dalam beberapa periode terpisah, beserta asumsi spread, slippage, jam trading, dan drawdown. Simpan setiap versi agar hasilnya bisa ditelusuri.
-2. Tambahkan tape replay per sesi dan ringkasan mingguan dari jurnal untuk membandingkan harga sinyal dengan fill aktual.
+2. Tambahkan tape replay dari data tick dan pasangkan hasil historis dengan fill aktual menurut kelompok jam.
 3. Perluas kalender FOMC, ECB, dan event relevan lain, lalu bandingkan efek filter berita hanya ketika waktu ketersediaan berita historis bisa dibuktikan.
 4. Tambahkan ringkasan Telegram harian dan filter spread berdasarkan data broker yang tersedia.
 

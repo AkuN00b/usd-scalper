@@ -6,22 +6,32 @@ Eksekusi di akun Exness tetap manual. Sistem menyarankan level Stop Loss dan Tak
 
 ## Jalankan dashboard
 
-Perlu Python 3.12 atau lebih baru. Dari folder proyek, buat virtual environment dan aktifkan dengan perintah sesuai sistem operasi.
+Untuk panduan dari setup lokal sampai alert, Telegram, dan transaksi manual, buka [Manual konfigurasi Windows](MANUAL_SETUP.md).
 
-```sh
+Perlu Python 3.12 atau lebih baru. Dashboard memakai HTML, CSS, dan JavaScript bawaan browser. Jalankan perintah berikut dari folder repo di PowerShell.
+
+```powershell
 python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (-not (Test-Path -LiteralPath .env)) {
+    .\.venv\Scripts\python.exe -c "from pathlib import Path; import secrets; config=Path('.env.example').read_text(); config=config.replace('WEBHOOK_TOKEN=', 'WEBHOOK_TOKEN='+secrets.token_hex(24)).replace('DASHBOARD_TOKEN=', 'DASHBOARD_TOKEN='+secrets.token_hex(24)); Path('.env').open('x', encoding='utf-8').write(config)"
+}
+.\.venv\Scripts\python.exe -m uvicorn scalper.server:app --env-file .env --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
-- Linux atau macOS — `source .venv/bin/activate`
-- Windows PowerShell — `.\.venv\Scripts\Activate.ps1`
+Di Linux atau macOS, gunakan `python3 -m venv .venv` dan ganti `.\.venv\Scripts\python.exe` dengan `.venv/bin/python`. Jalankan baris pembuat token secara langsung saat `.env` belum ada.
 
-```sh
-python -m pip install -r requirements.txt
-python -c "from pathlib import Path; import secrets; p=Path('.env'); text=Path('.env.example').read_text(); text=text.replace('WEBHOOK_TOKEN=', 'WEBHOOK_TOKEN='+secrets.token_hex(24)).replace('DASHBOARD_TOKEN=', 'DASHBOARD_TOKEN='+secrets.token_hex(24)); p.open('x', encoding='utf-8').write(text)"
-python -m uvicorn scalper.server:app --env-file .env --host 127.0.0.1 --port 8000 --no-access-log
-```
+Buka dashboard, klik **Akses data**, lalu masukkan `DASHBOARD_TOKEN` dari `.env`. Di PowerShell, buka file itu dengan `notepad .env`. Gunakan **Kelola akses → Kunci data** untuk mengakhiri akses di tab. Untuk mode teknikal lokal, ubah `ENABLE_PUBLIC_FEEDS=0` di `.env` dan restart server. Hentikan server dengan **Ctrl+C**. [Dashboard lokal](http://127.0.0.1:8000/)
 
-Buka dashboard, klik **Akses data**, lalu masukkan `DASHBOARD_TOKEN` dari `.env`. Perintah pembuat `.env` berhenti jika file itu sudah ada. Simpan kedua token di `.env`, yang dikecualikan oleh Git. [Dashboard lokal](http://127.0.0.1:8000/)
+Untuk perintah backtest dan pengujian di bawah, jalankan `python` dari virtual environment yang sama. Di PowerShell lo bisa mengganti `python` dengan `.\.venv\Scripts\python.exe`. Di Linux atau macOS, gunakan `.venv/bin/python`.
+
+### Pakai dashboard
+
+- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi. Gunakan **Lihat → Tinjau sinyal** untuk menelusuri keputusan, atau **Ekspor sinyal CSV** untuk mengunduh riwayat 7, 30, atau 90 hari UTC sesuai instrumen dan filter sinyal.
+- **Ringkasan.** Review 7, 30, atau 90 hari UTC untuk semua instrumen dalam satu halaman. Lihat trade yang ditutup per minggu, P/L bersih per mata uang, selisih fill per instrumen, kesehatan feed, status Telegram, dan backup SQLite. Tabel **Jurnal menurut jam entry UTC** mengelompokkan trade yang ditutup dalam periode terpilih berdasarkan jam entry. Pilih satu instrumen untuk melihat selisih fill rata-rata dalam satuan harganya.
+- **Tampilan.** Pilih tema terang, gelap, atau sesuai sistem. Lo juga bisa mengubah aksen warna, merapatkan tabel, dan menyembunyikan kalender. Pilihan tersebut, instrumen terakhir, dan watchlist disimpan per browser dan alamat dashboard.
+- **Backtest.** Pilih contoh XAUUSD atau EURUSD, atau gunakan **Buka report.json**. **Bandingkan dengan laporan lain** menambahkan tabel metrik serta garis kedua pada grafik R kumulatif atau drawdown. Klik salah satu jam entry UTC, atau gabungkan filter jam dengan sisi dan pemicu exit. Statistik filter dan **Ekspor hasil filter** mengikuti transaksi yang cocok di seluruh halaman. File pilihan dibaca dan diekspor dari browser.
+- **Jurnal trade.** Catat fill, lot, dan biaya aktual. Filter status, sisi, dan tanggal entry UTC berlaku untuk tabel, ringkasan, serta CSV per instrumen.
 
 ## Hubungkan TradingView
 
@@ -73,6 +83,8 @@ Data tick Exness untuk 2–8 Januari 2025 UTC, delay entry 1 detik, spread bid/a
 
 Keduanya rugi pada periode ini. Slippage simulasi per eksekusi 0,02 untuk XAUUSD dan 0,00001 untuk EURUSD.
 
+Grafik **Drawdown** menunjukkan selisih R kumulatif dari puncak yang sudah tercapai pada urutan trade yang sama. Grafik dan tabel perbandingan memakai seluruh laporan. Analisis jam entry memakai empat kelompok enam jam UTC dengan batas awal inklusif dan batas akhir eksklusif.
+
 ## Logika sinyal dan sumber
 
 Arah mengikuti posisi harga terhadap EMA 20 dan EMA 50 pada M15 terakhir yang sudah selesai ketika M3 dibuka. M3 menguji EMA 9/21, breakout candle sebelumnya, RSI 14, dan ukuran candle relatif terhadap ATR 14. Entry perlu konfirmasi EMA, breakout, ATR valid, dan skor minimal 85 dari 100. Stop awal 1,2 ATR dan target 1,5 kali jarak stop. Skor mengukur terpenuhinya aturan strategi.
@@ -87,15 +99,23 @@ Untuk backtest berita, tambahkan `--context data/macro-and-news.csv`. File [exam
 
 Buka tab **Jurnal trade**, pilih instrumen, lalu klik **Catat entry**. Untuk menautkan alasan dari TradingView, pilih **Catat entry dari sinyal** di keputusan terbaru atau buka baris BUY/SELL di riwayat sinyal. Masukkan harga fill aktual dari Exness. Waktu di formulir mengikuti zona waktu browser yang terlihat di label, sedangkan tabel dan ekspor memakai UTC. Untuk trade yang selesai, klik **Catat exit** dan isi waktu, harga, serta catatan.
 
-Jurnal menampilkan win rate bruto dari perubahan harga dan rata-rata R bruto jika trade ditutup dengan SL awal tercatat. Statistik ini belum memasukkan biaya atau ukuran lot. **Ekspor CSV** mengunduh seluruh jurnal untuk instrumen yang dipilih, termasuk catatan serta alasan sinyal yang ditautkan.
+Jurnal menghitung win rate dari arah perubahan harga serta R bruto jika SL awal tercatat. Di **Catat exit**, buka **Hasil broker dan biaya** dan isi P/L sebelum biaya, total biaya, dan mata uang akun untuk mendapat P/L bersih. Masukkan biaya nol jika memang tanpa biaya. Ringkasan menjumlah P/L bersih per mata uang. Jika trade ditautkan ke sinyal yang punya harga referensi, catatan menampilkan selisih fill dalam satuan harga. Nilai positif berarti harga masuk kurang menguntungkan dibanding referensi.
+
+**Ekspor CSV** mengunduh seluruh hasil filter untuk instrumen yang dipilih, termasuk catatan, alasan sinyal, lot, biaya, dan selisih fill jika tersedia.
 
 Jurnal tersimpan bersama sinyal di database lokal yang ditunjuk `DB_PATH`. Saat memperbarui proyek, jalankan dengan file database yang sama agar riwayatnya tersedia. Untuk meneruskan diskusi di chat lain, sertakan memori proyek dan, bila perlu, CSV yang ingin dibahas. [Memori proyek](PROJECT_MEMORY.md)
 
 ## Telegram dan GitHub
 
 - **Telegram.** Buat bot lewat BotFather, lalu buka chat dengan bot dan mulai percakapan. Isi `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` di `.env`, lalu restart aplikasi. Status pengiriman tampil di dashboard. Webhook tidak menunggu Telegram. [Telegram Bot API](https://core.telegram.org/bots/api)
-- **GitHub.** Isi ZIP bisa langsung dimasukkan ke repo GitHub. Workflow `.github/workflows/check.yml` menjalankan pengujian setiap push dan pull request. Untuk menerima webhook tetap diperlukan aplikasi yang berjalan di laptop dengan tunnel HTTPS atau layanan hosting.
+- **GitHub.** Workflow `.github/workflows/check.yml` menjalankan pengujian setiap push dan pull request. Aplikasi perlu berjalan di laptop dengan tunnel HTTPS atau di layanan hosting untuk menerima webhook live. [Langkah berikutnya](NEXT_STEPS.md)
 
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+## Backup dan pemulihan
+
+Buka akses dashboard, lalu pilih **Ringkasan → Unduh backup SQLite**. Snapshot bisa diunduh saat server aktif dan mencakup sinyal serta jurnal yang sudah tersimpan. Simpan hasilnya di tempat yang lo pilih. Konfigurasi `.env` dikelola terpisah.
+
+Untuk backup harian otomatis, set `AUTO_BACKUP=1` di `.env` lalu restart. Saat aplikasi berjalan, aplikasi membuat satu backup per tanggal UTC dan menyimpan tujuh backup otomatis terakhir di subfolder `backups` di sebelah file yang ditunjuk `DB_PATH`. Tab Ringkasan menunjukkan waktu backup otomatis terakhir atau pesan gagal. [Uji pemulihan](MANUAL_SETUP.md#6-backup-dan-uji-pemulihan)

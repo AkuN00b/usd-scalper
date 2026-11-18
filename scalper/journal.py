@@ -1,4 +1,5 @@
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 import csv
 import io
@@ -7,9 +8,11 @@ import json
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .context import parse_time
+from .exports import csv_cell
 from .strategy import canonical_symbol
 
 Price = Annotated[float, Field(ge=0.000000001, le=1_000_000_000)]
+Money = Annotated[float, Field(ge=-1_000_000_000, le=1_000_000_000)]
 
 
 def journal_time(value: datetime) -> str:
@@ -27,6 +30,7 @@ class TradeInput(BaseModel):
     target: Price | None = None
     signal_id: int | None = Field(default=None, gt=0)
     notes: str = Field(default="", max_length=2000)
+    lots: float | None = Field(default=None, gt=0, le=1_000_000)
 
     @field_validator("symbol")
     @classmethod
@@ -49,11 +53,21 @@ class ExitInput(BaseModel):
     exited_at: AwareDatetime
     exit_price: Price
     exit_notes: str = Field(default="", max_length=2000)
+    gross_pnl: Money | None = None
+    costs: Money | None = None
+    pnl_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
 
     @field_validator("exited_at")
     @classmethod
     def check_exit_time(cls, value: datetime) -> datetime:
         return check_time(value)
+
+    @model_validator(mode="after")
+    def check_currency(self):
+        has_amount = self.gross_pnl is not None or self.costs is not None
+        if has_amount != (self.pnl_currency is not None):
+            raise ValueError("Isi mata uang akun bersama hasil bruto atau biaya.")
+        return self
 
 
 def check_time(value: datetime) -> datetime:
@@ -68,6 +82,32 @@ class JournalError(Exception):
         self.status = status
 
 
+@dataclass(frozen=True)
+class JournalFilters:
+    status: Literal["all", "open", "closed"] = "all"
+    side: Literal["all", "BUY", "SELL"] = "all"
+    start: date | None = None
+    end: date | None = None
+
+    def where(self, symbol: str) -> tuple[str, list]:
+        clauses = ["t.symbol = ?"]
+        values = [symbol]
+        if self.status == "open":
+            clauses.append("t.exited_at IS NULL")
+        if self.status == "closed":
+            clauses.append("t.exited_at IS NOT NULL")
+        if self.side != "all":
+            clauses.append("t.side = ?")
+            values.append(self.side)
+        if self.start is not None:
+            clauses.append("t.opened_at >= ?")
+            values.append(self.start.isoformat() + "T00:00:00.000000Z")
+        if self.end is not None:
+            clauses.append("t.opened_at <= ?")
+            values.append(self.end.isoformat() + "T23:59:59.999999Z")
+        return " WHERE " + " AND ".join(clauses), values
+
+
 def initialize_journal(db):
     db.executescript("""
         CREATE TABLE IF NOT EXISTS journal_trades (
@@ -79,6 +119,11 @@ def initialize_journal(db):
         );
         CREATE INDEX IF NOT EXISTS journal_symbol_opened ON journal_trades(symbol, opened_at DESC);
     """)
+    db.execute("BEGIN IMMEDIATE")
+    fields = {row["name"] for row in db.execute("PRAGMA table_info(journal_trades)")}
+    for name, kind in (("lots", "REAL"), ("gross_pnl", "REAL"), ("costs", "REAL"), ("pnl_currency", "TEXT")):
+        if name not in fields:
+            db.execute(f"ALTER TABLE journal_trades ADD COLUMN {name} {kind}")
 
 
 SELECT_TRADES = """
@@ -91,6 +136,8 @@ JOURNAL_FIELDS = (
     "id", "symbol", "side", "opened_at", "entry", "stop", "target", "signal_id", "signal_at",
     "signal_score", "signal_reasons", "notes", "exited_at", "exit_price", "exit_notes",
     "gross_price_move", "gross_r",
+    "lots", "gross_pnl", "costs", "pnl_currency", "net_pnl",
+    "signal_reference", "entry_slippage_price",
 )
 
 
@@ -99,15 +146,20 @@ def trade_view(row) -> dict:
     del record["request_id"]
     snapshot = record.pop("signal_payload")
     signal = json.loads(snapshot) if snapshot is not None else {}
+    direction = 1 if record["side"] == "BUY" else -1
+    reference = signal.get("reference_price")
+    slippage = direction * (record["entry"] - reference) if isinstance(reference, (int, float)) else None
     move = None
     result = None
     if record["exit_price"] is not None:
-        difference = record["exit_price"] - record["entry"]
-        move = difference if record["side"] == "BUY" else -difference
+        move = direction * (record["exit_price"] - record["entry"])
         if record["stop"] is not None:
             result = move / abs(record["entry"] - record["stop"])
+    gross, costs = record["gross_pnl"], record["costs"]
     return dict(record, signal_score=signal.get("score"), signal_reasons=signal.get("reasons", []),
-                gross_price_move=move, gross_r=result)
+                gross_price_move=move, gross_r=result,
+                net_pnl=gross - costs if gross is not None and costs is not None else None,
+                signal_reference=reference, entry_slippage_price=slippage)
 
 
 def read_trade(db, trade_id: int) -> dict:
@@ -128,8 +180,8 @@ def add_trade(db, trade: TradeInput) -> dict:
         if trade.opened_at < parse_time(source["closed"]):
             raise JournalError(422, "Waktu entry tidak boleh sebelum sinyal yang ditautkan.")
     added = db.execute("""
-        INSERT INTO journal_trades(request_id, symbol, side, opened_at, entry, stop, target, signal_id, notes)
-        VALUES (:request_id, :symbol, :side, :opened_at, :entry, :stop, :target, :signal_id, :notes)
+        INSERT INTO journal_trades(request_id, symbol, side, opened_at, entry, stop, target, signal_id, notes, lots)
+        VALUES (:request_id, :symbol, :side, :opened_at, :entry, :stop, :target, :signal_id, :notes, :lots)
         ON CONFLICT(request_id) DO NOTHING RETURNING id
     """, values).fetchone()
     if added is not None:
@@ -141,43 +193,56 @@ def add_trade(db, trade: TradeInput) -> dict:
 
 
 def record_exit(db, trade_id: int, exit: ExitInput) -> dict:
-    values = (journal_time(exit.exited_at), exit.exit_price, exit.exit_notes)
+    values = (journal_time(exit.exited_at), exit.exit_price, exit.exit_notes, exit.gross_pnl, exit.costs, exit.pnl_currency)
     updated = db.execute("""
-        UPDATE journal_trades SET exited_at = ?, exit_price = ?, exit_notes = ?
+        UPDATE journal_trades SET exited_at = ?, exit_price = ?, exit_notes = ?,
+            gross_pnl = ?, costs = ?, pnl_currency = ?
         WHERE id = ? AND exited_at IS NULL AND opened_at <= ?
     """, (*values, trade_id, values[0])).rowcount
     trade = read_trade(db, trade_id)
-    if not updated and values != (trade["exited_at"], trade["exit_price"], trade["exit_notes"]):
+    recorded = (trade["exited_at"], trade["exit_price"], trade["exit_notes"],
+                trade["gross_pnl"], trade["costs"], trade["pnl_currency"])
+    if not updated and values != recorded:
         if trade["exited_at"] is not None:
             raise JournalError(409, "Trade ini sudah punya exit.")
         raise JournalError(422, "Waktu exit tidak boleh sebelum entry.")
     return trade
 
 
-def journal_rows(db, symbol: str, limit: int | None = None, offset: int = 0):
-    query = SELECT_TRADES + " WHERE t.symbol = ? ORDER BY t.opened_at DESC, t.id DESC"
-    parameters = (symbol,)
+def journal_rows(db, symbol: str, limit: int | None = None, offset: int = 0,
+                 filters: JournalFilters = JournalFilters()):
+    where, parameters = filters.where(symbol)
+    query = SELECT_TRADES + where + " ORDER BY t.opened_at DESC, t.id DESC"
     if limit is not None:
         query += " LIMIT ? OFFSET ?"
-        parameters += (limit, offset)
+        parameters.extend((limit, offset))
     return (trade_view(row) for row in db.execute(query, parameters))
 
 
-def summary(db, symbol: str) -> dict:
-    row = db.execute("""
+def summary(db, symbol: str, filters: JournalFilters = JournalFilters()) -> dict:
+    where, parameters = filters.where(symbol)
+    row = db.execute(f"""
         WITH moves AS (
             SELECT exited_at, stop, entry,
                 CASE side WHEN 'BUY' THEN exit_price-entry ELSE entry-exit_price END AS move
-            FROM journal_trades WHERE symbol = ?
+            FROM journal_trades AS t{where}
         )
         SELECT count(*) AS total, count(exited_at) AS closed,
             count(CASE WHEN move > 0 THEN 1 END) AS wins,
             count(CASE WHEN move IS NOT NULL AND stop IS NOT NULL THEN 1 END) AS r_count,
-            avg(move / abs(entry-stop)) AS mean_gross_r
+            avg(move / abs(entry-stop)) AS mean_gross_r,
+            sum(move / abs(entry-stop)) AS total_gross_r
         FROM moves
-    """, (symbol,)).fetchone()
+    """, parameters).fetchone()
     stats = dict(row)
     stats["gross_win_rate"] = stats["wins"] / stats["closed"] if stats["closed"] else None
+    stats["net_by_currency"] = [
+        dict(row) for row in db.execute(f"""
+            SELECT pnl_currency AS currency, count(*) AS trades, sum(gross_pnl - costs) AS net
+            FROM journal_trades AS t{where} AND gross_pnl IS NOT NULL AND costs IS NOT NULL
+            GROUP BY pnl_currency ORDER BY pnl_currency
+        """, parameters)
+    ]
     return stats
 
 
@@ -188,7 +253,6 @@ def csv_export(rows) -> str:
     for trade in rows:
         row = {**trade, "signal_reasons": " ".join(trade["signal_reasons"])}
         for field in ("notes", "exit_notes", "signal_reasons"):
-            if row[field].lstrip().startswith(("=", "+", "-", "@")):
-                row[field] = "'" + row[field]
+            row[field] = csv_cell(row[field])
         writer.writerow(row)
     return file.getvalue()
