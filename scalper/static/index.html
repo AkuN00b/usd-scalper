@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>USD Scalper</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/dashboard.js" defer></script>
+  <script src="/static/journal.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span> USD Scalper</a>
+    <div class="top-controls">
+      <label class="symbol-control">Instrumen
+        <select id="symbol">
+          <option>XAUUSD</option><option>EURUSD</option><option>GBPUSD</option><option>USDJPY</option>
+          <option>USDCHF</option><option>USDCAD</option><option>AUDUSD</option><option>NZDUSD</option>
+        </select>
+      </label>
+      <button id="access" type="button">Akses data</button>
+    </div>
+  </header>
+  <main>
+    <div class="page-header">
+      <div><p class="kicker">M15 arah <span>·</span> M3 keputusan</p><h1 id="market-title">XAUUSD</h1></div>
+      <p id="connection" class="connection" role="status">Akses data diperlukan</p>
+    </div>
+    <nav class="tabs" aria-label="Tampilan">
+      <button id="live-tab" type="button" aria-controls="live" aria-pressed="true">Pantauan market</button>
+      <button id="backtest-tab" type="button" aria-controls="backtest" aria-pressed="false">Backtest</button>
+      <button id="journal-tab" type="button" aria-controls="journal" aria-pressed="false">Jurnal trade</button>
+    </nav>
+    <section id="live">
+      <div class="grid">
+        <section class="panel chart">
+          <div class="panel-header"><h2>Chart TradingView</h2><a id="chart-link" class="muted" target="_blank" rel="noopener noreferrer">Buka di TradingView</a></div>
+          <iframe id="chart" title="Chart TradingView M3" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        </section>
+        <section class="panel latest">
+          <div class="panel-header"><h2>Keputusan terakhir</h2><time id="signal-time" class="muted"></time></div>
+          <div class="latest-body">
+            <p class="side" id="signal-side">—</p>
+            <p class="muted" id="signal-score">Menunggu alert TradingView</p>
+            <dl class="levels">
+              <div><dt>Referensi</dt><dd id="reference">—</dd></div>
+              <div><dt>Stop</dt><dd id="stop">—</dd></div>
+              <div><dt>Target</dt><dd id="target">—</dd></div>
+            </dl>
+            <ul class="reasons" id="reasons"></ul>
+            <button id="latest-entry" type="button" class="entry-button" hidden>Catat entry dari sinyal</button>
+          </div>
+        </section>
+      </div>
+      <div class="grid lower">
+        <section class="panel">
+          <div class="panel-header"><h2>Riwayat sinyal</h2><label class="checkbox"><input id="actionable" type="checkbox"> BUY / SELL saja</label></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Tutup M3 · UTC</th><th scope="col">Sinyal</th><th scope="col">Skor</th><th scope="col">Telegram</th><th scope="col">Alasan</th></tr></thead>
+              <tbody id="history"><tr><td colspan="5">Belum ada data.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2>Kalender dan berita</h2></div>
+          <ul id="feeds" class="feeds"></ul>
+          <ul id="events" class="events"><li class="muted">Belum ada data.</li></ul>
+        </section>
+      </div>
+    </section>
+    <section id="backtest" hidden>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Hasil backtest</h2>
+          <label class="file-picker">Buka report.json <input id="report-file" type="file" accept=".json,application/json"></label>
+        </div>
+        <div id="report-summary" class="report-summary" role="status">Pilih report.json dari hasil backtest.</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Sisi</th><th scope="col">Sinyal · UTC</th><th scope="col">Entry · UTC</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Pemicu exit</th><th scope="col">Hasil · R</th></tr></thead>
+            <tbody id="trades"><tr><td colspan="7">Belum ada laporan.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+    <section id="journal" hidden>
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Jurnal transaksi Exness</h2>
+          <div class="journal-actions">
+            <button id="journal-export" type="button" disabled>Ekspor CSV</button>
+            <button id="journal-new" class="primary" type="button">Catat entry</button>
+          </div>
+        </div>
+        <div id="journal-summary" class="report-summary" aria-label="Ringkasan jurnal"></div>
+        <p id="journal-status" class="journal-status muted" role="status">Buka akses dashboard untuk melihat jurnal.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Entry · UTC</th><th scope="col">Sisi</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Harga exit</th><th scope="col">R bruto</th><th scope="col">Catatan</th><th scope="col">Aksi</th></tr></thead>
+            <tbody id="journal-rows"><tr><td colspan="8">Belum ada trade.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="journal-pages" id="journal-pages" hidden>
+          <button id="journal-prev" type="button">Sebelumnya</button>
+          <span id="journal-page" class="muted" aria-live="polite"></span>
+          <button id="journal-next" type="button">Berikutnya</button>
+        </div>
+      </section>
+    </section>
+  </main>
+  <dialog id="token-dialog">
+    <form id="token-form">
+      <h2>Akses dashboard</h2>
+      <label for="dashboard-token">Token dashboard</label>
+      <input id="dashboard-token" type="password" autocomplete="current-password" required>
+      <div class="dialog-actions"><button id="cancel" type="button">Batal</button><button class="primary" type="submit">Buka</button></div>
+    </form>
+  </dialog>
+  <dialog id="entry-dialog" aria-labelledby="entry-title">
+    <form id="entry-form">
+      <h2 id="entry-title">Catat entry</h2>
+      <p id="entry-signal" class="muted" hidden></p>
+      <div class="form-grid">
+        <label>Instrumen<input id="entry-symbol" readonly></label>
+        <label>Sisi<select id="entry-side"><option>BUY</option><option>SELL</option></select></label>
+      </div>
+      <label>Waktu entry <span class="form-zone muted"></span><input id="entry-at" type="datetime-local" step="1" required></label>
+      <label>Harga entry aktual<input id="entry-price" type="number" step="any" min="0" required></label>
+      <div class="form-grid">
+        <label>SL awal <small>(opsional)</small><input id="entry-stop" type="number" step="any" min="0"></label>
+        <label>TP awal <small>(opsional)</small><input id="entry-target" type="number" step="any" min="0"></label>
+      </div>
+      <label>Catatan entry <small>(opsional)</small><textarea id="entry-notes" rows="2" maxlength="2000"></textarea></label>
+      <p id="entry-error" class="form-error sell" role="alert"></p>
+      <div class="dialog-actions"><button id="entry-cancel" type="button">Batal</button><button class="primary" type="submit">Simpan entry</button></div>
+    </form>
+  </dialog>
+  <dialog id="exit-dialog" aria-labelledby="exit-title">
+    <form id="exit-form">
+      <h2 id="exit-title">Catat exit</h2>
+      <p id="exit-trade" class="muted"></p>
+      <label>Waktu exit <span class="form-zone muted"></span><input id="exit-at" type="datetime-local" step="1" required></label>
+      <label>Harga exit aktual<input id="exit-price" type="number" step="any" min="0" required></label>
+      <label>Catatan exit <small>(opsional)</small><textarea id="exit-notes" rows="2" maxlength="2000"></textarea></label>
+      <p id="exit-error" class="form-error sell" role="alert"></p>
+      <div class="dialog-actions"><button id="exit-cancel" type="button">Batal</button><button class="primary" type="submit">Simpan exit</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

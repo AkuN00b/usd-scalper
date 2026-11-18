@@ -1,0 +1,61 @@
+//@version=6
+strategy("USD Scalper · M15 + M3", overlay=true, pyramiding=0, process_orders_on_close=false, default_qty_type=strategy.fixed, default_qty_value=1)
+
+webhookToken = input.string("", "Token webhook", tooltip="Gunakan token hex dari WEBHOOK_TOKEN. Buat ulang alert setelah input berubah.")
+if not (timeframe.isminutes and timeframe.multiplier == 3 and chart.is_standard)
+    runtime.error("Pakai chart candlestick standar M3.")
+
+[trendClose, trendFast, trendSlow, trendClosed, trendIndex] = request.security(syminfo.tickerid, "15", [close[1], ta.ema(close, 20)[1], ta.ema(close, 50)[1], time_close[1], bar_index[1]], lookahead=barmerge.lookahead_on)
+
+ema9 = ta.ema(close, 9)
+ema21 = ta.ema(close, 21)
+rsi = ta.rsi(close, 14)
+atr = ta.atr(14)
+trendAge = time_close - trendClosed
+ready = barstate.isconfirmed and trendIndex >= 49 and trendAge >= 180000 and trendAge <= 900000 and time - time[1] == 180000 and not na(atr) and not na(rsi)
+up = trendFast > trendSlow and trendClose > trendFast
+down = trendFast < trendSlow and trendClose < trendFast
+buyAlign = close > ema9 and ema9 > ema21
+sellAlign = close < ema9 and ema9 < ema21
+buyBreak = close > high[1]
+sellBreak = close < low[1]
+buyBody = close - open
+sellBody = open - close
+buyImpulse = atr > 0 and buyBody >= 0.25 * atr and buyBody <= 1.5 * atr
+sellImpulse = atr > 0 and sellBody >= 0.25 * atr and sellBody <= 1.5 * atr
+buyScore = 40 + (buyAlign ? 20 : 0) + (rsi >= 52 and rsi <= 72 ? 15 : 0) + (buyBreak ? 15 : 0) + (buyImpulse ? 10 : 0)
+sellScore = 40 + (sellAlign ? 20 : 0) + (rsi >= 28 and rsi <= 48 ? 15 : 0) + (sellBreak ? 15 : 0) + (sellImpulse ? 10 : 0)
+buy = ready and up and buyAlign and buyBreak and buyScore >= 85 and atr > 0
+sell = ready and down and sellAlign and sellBreak and sellScore >= 85 and atr > 0
+
+if strategy.position_size == 0 and (buy or sell)
+    stopTicks = math.max(1, int(math.round(1.2 * atr / syminfo.mintick)))
+    targetTicks = math.max(1, int(math.round(1.2 * atr * 1.5 / syminfo.mintick)))
+    if buy
+        strategy.entry("BUY", strategy.long, disable_alert=true)
+        strategy.exit("BUY SL/TP", "BUY", loss=stopTicks, profit=targetTicks, disable_alert=true)
+    else
+        strategy.entry("SELL", strategy.short, disable_alert=true)
+        strategy.exit("SELL SL/TP", "SELL", loss=stopTicks, profit=targetTicks, disable_alert=true)
+
+if barstate.isconfirmed and strategy.opentrades > 0 and time_close - strategy.opentrades.entry_time(0) >= 30 * 60 * 1000
+    strategy.close_all(comment="30 menit", disable_alert=true)
+
+num(float value) =>
+    str.tostring(value, "0.############")
+
+utc(int timestamp) =>
+    str.format_time(timestamp, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC")
+
+field(string name, float value) =>
+    '"' + name + '":' + num(value)
+
+if ready and webhookToken != ""
+    fields = field("close", close) + "," + field("open", open) + "," + field("high", high) + "," + field("low", low) + "," + field("ema9", ema9) + "," + field("ema21", ema21) + "," + field("rsi", rsi) + "," + field("atr", atr) + "," + field("previous_high", high[1]) + "," + field("previous_low", low[1]) + "," + field("trend_close", trendClose) + "," + field("trend_ema20", trendFast) + "," + field("trend_ema50", trendSlow)
+    message = '{"version":1,"token":"' + webhookToken + '","symbol":"' + syminfo.tickerid + '","timeframe":"3","closed_at":"' + utc(time_close) + '","trend_closed_at":"' + utc(trendClosed) + '","features":{' + fields + '}}'
+    alert(message, alert.freq_once_per_bar_close)
+
+plot(ema9, "EMA 9 M3", color=color.aqua, linewidth=2)
+plot(ema21, "EMA 21 M3", color=color.orange)
+plotshape(buy, "Setup BUY teknikal", style=shape.triangleup, location=location.belowbar, color=color.teal, size=size.tiny, text="BUY")
+plotshape(sell, "Setup SELL teknikal", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.tiny, text="SELL")

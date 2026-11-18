@@ -1,0 +1,3 @@
+kind,event_at,known_at,currencies,impact,title,source,url
+scheduled,2025-01-15T13:30:00Z,2025-01-14T12:00:00Z,USD,high,Contoh rilis inflasi,Contoh fiktif,
+news,2025-01-16T15:00:00Z,2025-01-16T15:04:00Z,USD|XAU,high,Contoh berita gangguan pelayaran,Contoh fiktif,
