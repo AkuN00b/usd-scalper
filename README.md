@@ -6,6 +6,8 @@ Eksekusi di akun Exness tetap manual. Sistem menyarankan level Stop Loss dan Tak
 
 ## Jalankan dashboard
 
+Untuk panduan dari setup lokal sampai alert, Telegram, dan transaksi manual, buka [Manual konfigurasi Windows](MANUAL_SETUP.md).
+
 Perlu Python 3.12 atau lebih baru. Dashboard memakai HTML, CSS, dan JavaScript bawaan browser. Jalankan perintah berikut dari folder repo di PowerShell.
 
 ```powershell
@@ -25,10 +27,10 @@ Untuk perintah backtest dan pengujian di bawah, jalankan `python` dari virtual e
 
 ### Pakai dashboard
 
-- **Pantauan market.** Pilih instrumen di bagian atas atau dari **Watchlist**. Klik **Favorit** untuk menambah atau menghapus instrumen yang sedang dipilih. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA.
+- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi.
 - **Tampilan.** Pilih tema terang, gelap, atau sesuai sistem. Lo juga bisa mengubah aksen warna, merapatkan tabel, dan menyembunyikan kalender. Pilihan tersebut, instrumen terakhir, dan watchlist disimpan per browser dan alamat dashboard.
-- **Backtest.** Pilih contoh XAUUSD atau EURUSD untuk mencoba tanpa akun TradingView atau token dashboard. Untuk laporan sendiri, gunakan **Buka report.json**. File pilihan dibaca di browser. Grafik menunjukkan R kumulatif untuk seluruh laporan dan filter sisi berlaku pada tabel transaksi.
-- **Jurnal trade.** Buka akses untuk mencatat dan menutup trade aktual, melihat statistik bruto, serta mengekspor CSV per instrumen.
+- **Backtest.** Pilih contoh XAUUSD atau EURUSD, atau gunakan **Buka report.json**. **Bandingkan dengan laporan lain** menambahkan tabel metrik serta garis kedua pada grafik R kumulatif. Grafik memakai urutan transaksi masing-masing laporan. Filter sisi dan pemicu exit berlaku pada tabel transaksi utama. File pilihan dibaca di browser.
+- **Jurnal trade.** Catat fill, lot, dan biaya aktual. Filter status, sisi, dan tanggal entry UTC berlaku untuk tabel, ringkasan, serta CSV per instrumen.
 
 ## Hubungkan TradingView
 
@@ -94,7 +96,9 @@ Untuk backtest berita, tambahkan `--context data/macro-and-news.csv`. File [exam
 
 Buka tab **Jurnal trade**, pilih instrumen, lalu klik **Catat entry**. Untuk menautkan alasan dari TradingView, pilih **Catat entry dari sinyal** di keputusan terbaru atau buka baris BUY/SELL di riwayat sinyal. Masukkan harga fill aktual dari Exness. Waktu di formulir mengikuti zona waktu browser yang terlihat di label, sedangkan tabel dan ekspor memakai UTC. Untuk trade yang selesai, klik **Catat exit** dan isi waktu, harga, serta catatan.
 
-Jurnal menampilkan win rate bruto dari perubahan harga dan rata-rata R bruto jika trade ditutup dengan SL awal tercatat. Statistik ini belum memasukkan biaya atau ukuran lot. **Ekspor CSV** mengunduh seluruh jurnal untuk instrumen yang dipilih, termasuk catatan serta alasan sinyal yang ditautkan.
+Jurnal menghitung win rate dari arah perubahan harga serta R bruto jika SL awal tercatat. Di **Catat exit**, buka **Hasil broker dan biaya** dan isi P/L sebelum biaya, total biaya, dan mata uang akun untuk mendapat P/L bersih. Masukkan biaya nol jika memang tanpa biaya. Ringkasan menjumlah P/L bersih per mata uang. Jika trade ditautkan ke sinyal yang punya harga referensi, catatan menampilkan selisih fill dalam satuan harga. Nilai positif berarti harga masuk kurang menguntungkan dibanding referensi.
+
+**Ekspor CSV** mengunduh seluruh hasil filter untuk instrumen yang dipilih, termasuk catatan, alasan sinyal, lot, biaya, dan selisih fill jika tersedia.
 
 Jurnal tersimpan bersama sinyal di database lokal yang ditunjuk `DB_PATH`. Saat memperbarui proyek, jalankan dengan file database yang sama agar riwayatnya tersedia. Untuk meneruskan diskusi di chat lain, sertakan memori proyek dan, bila perlu, CSV yang ingin dibahas. [Memori proyek](PROJECT_MEMORY.md)
 

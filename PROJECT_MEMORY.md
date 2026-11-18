@@ -14,8 +14,8 @@
 - Strategi awal menggunakan EMA M15/M3, breakout, RSI, dan ATR. Skor minimal 85. SL 1,2 ATR, target 1,5 kali jarak SL, dan batas simulasi 30 menit.
 - Kalender BLS dan feed Fed, ECB, UN News menjadi sumber dasar. GDELT opsional sempat merespons 503 saat uji. Berita berdampak tinggi merupakan filter entry, tanpa klasifikasi arah oleh model AI.
 - Backtest teknikal dengan tick Exness 2–8 Januari 2025 UTC memakai delay satu detik, komisi nol, dan slippage 0,02 XAUUSD atau 0,00001 EURUSD. XAUUSD mencatat 123 trade dengan −7,21 R. EURUSD mencatat 129 trade dengan −31,73 R. Keduanya rugi pada sampel ini. [Ringkasan dan laporan](README.md#hasil-uji-yang-disertakan)
-- Jurnal lokal mencatat harga dan waktu entry/exit aktual, rencana SL/TP yang diisi pengguna, catatan, dan tautan opsional ke keputusan TradingView. Riwayat tersimpan di SQLite dan dapat diekspor per instrumen.
-- Dashboard menyimpan tema, aksen, tampilan ringkas, instrumen aktif, dan watchlist per browser. Grafik pantauan memakai harga referensi sinyal. Widget TradingView dimuat setelah dipilih. Tab Backtest menampilkan grafik R kumulatif, filter sisi, dan contoh XAUUSD serta EURUSD.
+- Jurnal lokal mencatat fill, lot, SL/TP awal, P/L broker, biaya, mata uang, dan catatan. Tautan ke sinyal menambahkan selisih harga fill jika referensinya tersedia. Filter status, sisi, dan tanggal entry UTC berlaku pada ringkasan dan CSV. P/L bersih dijumlahkan per mata uang.
+- Dashboard menyimpan tema, aksen, tampilan ringkas, instrumen aktif, dan watchlist per browser. Watchlist menampilkan keputusan terakhir dan status feed wajib. Grafik pantauan memakai harga referensi sinyal. Tab Backtest membandingkan dua laporan dengan grafik R kumulatif, profit factor, dan rata-rata R per transaksi.
 
 ## Usulan urutan berikutnya
 

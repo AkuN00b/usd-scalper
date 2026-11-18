@@ -102,7 +102,11 @@
           </div>
         </section>
         <section class="panel" id="context-panel">
-          <div class="panel-header"><h2>Kalender dan berita</h2></div>
+          <div class="panel-header"><h2>Kalender dan berita</h2>
+            <label class="filter-control">Jenis <select id="event-filter">
+              <option value="all">Semua</option><option value="scheduled">Agenda</option><option value="news">Berita</option><option value="high">Dampak tinggi</option>
+            </select></label>
+          </div>
           <ul id="feeds" class="feeds"></ul>
           <ul id="events" class="events"><li class="muted">Belum ada data.</li></ul>
         </section>
@@ -121,13 +125,32 @@
         </div>
         <p id="report-status" class="section-status muted" role="status">Pilih contoh atau buka laporan hasil backtest.</p>
         <div id="report-summary" class="report-summary"></div>
+        <details id="report-compare" class="report-compare" hidden>
+          <summary>Bandingkan dengan laporan lain</summary>
+          <div class="report-controls">
+            <label class="filter-control">Contoh pembanding
+              <select id="compare-example"><option value="">Pilih instrumen</option><option>XAUUSD</option><option>EURUSD</option></select>
+            </label>
+            <label class="file-picker">Buka file pembanding <input id="compare-file" type="file" accept=".json,application/json" aria-label="Buka file pembanding"></label>
+            <button id="compare-clear" type="button" hidden>Hapus pembanding</button>
+          </div>
+          <p id="compare-status" class="muted" role="status"></p>
+          <div id="compare-table" class="table-wrap" tabindex="0" role="region" aria-label="Tabel perbandingan backtest" hidden>
+            <table><thead><tr><th scope="col">Metrik</th><th scope="col">A · Utama</th><th scope="col">B · Pembanding</th></tr></thead><tbody id="compare-rows"></tbody></table>
+          </div>
+        </details>
         <section id="equity-view" class="equity-view" hidden>
           <div class="panel-header"><h2>Akumulasi hasil</h2><span class="muted">R per urutan trade</span></div>
           <canvas id="equity-chart" role="img" aria-label="Grafik R kumulatif. Hasil per trade tersedia di tabel."></canvas>
+          <p id="equity-legend" class="chart-note muted" hidden><span class="legend-a">A · Utama</span><span class="legend-b">B · Pembanding</span></p>
         </section>
         <div id="report-filters" class="panel-header" hidden>
           <h2>Transaksi</h2>
-          <label class="filter-control">Sisi <select id="report-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
+          <div class="report-controls">
+            <span id="report-match" class="muted" aria-live="polite"></span>
+            <label class="filter-control">Sisi <select id="report-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
+            <label class="filter-control">Exit <select id="report-exit"><option value="">Semua</option></select></label>
+          </div>
         </div>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel transaksi backtest">
           <table>
@@ -151,12 +174,20 @@
             <button id="journal-new" class="primary" type="button">Catat entry</button>
           </div>
         </div>
+        <form id="journal-filters" class="panel-header journal-filters" aria-label="Filter jurnal" hidden>
+          <label class="filter-control">Status <select id="journal-state"><option value="all">Semua</option><option value="open">Terbuka</option><option value="closed">Ditutup</option></select></label>
+          <label class="filter-control">Sisi <select id="journal-side"><option value="all">Semua</option><option>BUY</option><option>SELL</option></select></label>
+          <label class="filter-control">Entry sejak (UTC) <input id="journal-start" type="date"></label>
+          <label class="filter-control">Entry sampai (UTC) <input id="journal-end" type="date"></label>
+          <button type="submit">Terapkan</button>
+          <button id="journal-reset" type="reset">Reset</button>
+        </form>
         <div id="journal-summary" class="report-summary" aria-label="Ringkasan jurnal"></div>
         <p id="journal-status" class="section-status muted" role="status">Buka akses dashboard untuk melihat jurnal.</p>
         <div class="table-wrap" tabindex="0" role="region" aria-label="Tabel jurnal transaksi">
           <table>
-            <thead><tr><th scope="col">Entry · UTC</th><th scope="col">Sisi</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Harga exit</th><th scope="col">R bruto</th><th scope="col">Catatan</th><th scope="col">Aksi</th></tr></thead>
-            <tbody id="journal-rows"><tr><td colspan="8">Belum ada trade.</td></tr></tbody>
+            <thead><tr><th scope="col">Entry · UTC</th><th scope="col">Sisi</th><th scope="col">Harga entry</th><th scope="col">Exit · UTC</th><th scope="col">Harga exit</th><th scope="col">R bruto</th><th scope="col">P/L bersih</th><th scope="col">Catatan</th><th scope="col">Aksi</th></tr></thead>
+            <tbody id="journal-rows"><tr><td colspan="9">Belum ada trade.</td></tr></tbody>
           </table>
         </div>
         <div class="pagination" id="journal-pages" hidden>
@@ -203,7 +234,10 @@
         <label>Sisi<select id="entry-side"><option>BUY</option><option>SELL</option></select></label>
       </div>
       <label>Waktu entry <span class="form-zone muted"></span><input id="entry-at" type="datetime-local" step="1" required></label>
-      <label>Harga entry aktual<input id="entry-price" type="number" step="any" min="0" required></label>
+      <div class="form-grid">
+        <label>Harga entry aktual<input id="entry-price" type="number" step="any" min="0" required></label>
+        <label>Lot <small>(opsional)</small><input id="entry-lots" type="number" step="any" min="0.000000001" max="1000000"></label>
+      </div>
       <div class="form-grid">
         <label>SL awal <small>(opsional)</small><input id="entry-stop" type="number" step="any" min="0"></label>
         <label>TP awal <small>(opsional)</small><input id="entry-target" type="number" step="any" min="0"></label>
@@ -219,6 +253,15 @@
       <p id="exit-trade" class="muted"></p>
       <label>Waktu exit <span class="form-zone muted"></span><input id="exit-at" type="datetime-local" step="1" required></label>
       <label>Harga exit aktual<input id="exit-price" type="number" step="any" min="0" required></label>
+      <details class="exit-costs">
+        <summary>Hasil broker dan biaya (opsional)</summary>
+        <div class="form-grid">
+          <label>P/L sebelum biaya<input id="exit-gross" type="number" step="any"></label>
+          <label>Total biaya<input id="exit-costs" type="number" step="any"></label>
+        </div>
+        <label>Mata uang akun<input id="exit-currency" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" placeholder="USD"></label>
+        <p class="muted">Masukkan potongan sebagai biaya positif, kredit sebagai negatif, atau 0 jika tanpa biaya.</p>
+      </details>
       <label>Catatan exit <small>(opsional)</small><textarea id="exit-notes" rows="2" maxlength="2000"></textarea></label>
       <p id="exit-error" class="form-error sell" role="alert"></p>
       <div class="dialog-actions"><button id="exit-cancel" type="button">Batal</button><button class="primary" type="submit">Simpan exit</button></div>

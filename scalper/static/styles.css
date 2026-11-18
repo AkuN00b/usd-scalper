@@ -10,6 +10,7 @@
   --accent: #5438cd;
   --accent-strong: #4429b9;
   --accent-soft: #efebff;
+  --compare: #a45308;
   --buy: #067352;
   --buy-soft: #e6f7ef;
   --sell: #b32948;
@@ -40,6 +41,7 @@
   --accent: #ae9dff;
   --accent-strong: #c3b5ff;
   --accent-soft: #30264f;
+  --compare: #f5b16a;
   --buy: #7ae1b7;
   --buy-soft: #173d35;
   --sell: #ff9cb0;
@@ -125,6 +127,10 @@ h2 { margin: 0; font-size: .98rem; font-weight: 700; }
 .watchlist-items { display: flex; flex-wrap: wrap; gap: .45rem; }
 .watchlist-items p { margin: 0; }
 .watchlist-items button { display: flex; align-items: center; gap: .5rem; background: var(--surface-alt); padding: .38rem .57rem; }
+.watchlist-items button.with-signal { display: grid; grid-template-columns: 1fr auto; text-align: left; gap: .22rem .65rem; min-width: 8rem; }
+.watchlist-meta { grid-column: 1 / -1; color: var(--muted); font-size: .72rem; }
+.watchlist-meta.wait { color: var(--wait); }
+.watchlist-items .badge { justify-self: end; }
 .watchlist-items button[aria-pressed="true"], #favorite[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .symbol-code { color: var(--muted); font-size: .68rem; }
 
@@ -208,6 +214,18 @@ details p { margin: .45rem 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .pagination { justify-content: end; padding: .65rem .95rem; }
 .equity-view { margin-top: .2rem; }
 .equity-view canvas { display: block; width: 100%; height: 240px; }
+.report-compare, .exit-costs { max-width: none; padding: .75rem .95rem; border-top: 1px solid var(--edge); }
+.report-compare > summary, .exit-costs > summary { font-size: .84rem; font-weight: 650; }
+.report-compare .report-controls { margin-top: .8rem; }
+.report-compare p:empty { display: none; }
+.report-compare .table-wrap { margin-top: .65rem; max-height: none; border: 1px solid var(--edge); border-radius: 8px; }
+#equity-legend { display: flex; gap: 1rem; flex-wrap: wrap; }
+#equity-legend span::before { content: ""; display: inline-block; width: .9rem; margin-right: .35rem; vertical-align: middle; border-top: 2px solid var(--accent); }
+#equity-legend .legend-b::before { border-top: 2px dashed var(--compare); }
+.journal-filters { justify-content: start; }
+.journal-filters label { flex-wrap: wrap; }
+.journal-filters input { background: var(--surface); border: 1px solid var(--edge); border-radius: 7px; color: var(--text); padding: .32rem .46rem; }
+.exit-costs { margin-top: .85rem; padding: .65rem 0 0; }
 #report-filters { border-top: 1px solid var(--edge); }
 #journal-rows button { white-space: nowrap; padding: .33rem .48rem; font-size: .76rem; }
 

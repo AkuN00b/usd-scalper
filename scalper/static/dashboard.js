@@ -22,6 +22,8 @@ try {
   // The token can still be used for the current page.
 }
 let signals = [];
+let watchlistData = {};
+let contextEvents = [];
 let activeRequest;
 let lastSnapshot = "";
 let activeTab = "live";
@@ -115,7 +117,23 @@ function renderWatchlist() {
     button.type = "button";
     button.dataset.symbol = name;
     button.setAttribute("aria-pressed", String(name === symbol.value));
-    button.append(node("span", instruments[name][0], "symbol-code"));
+    const current = watchlistData[name];
+    if (current) {
+      button.classList.add("with-signal");
+      const side = current.side ?? "—";
+      button.append(node("span", side, "badge " + side.toLowerCase()));
+      const details = current.closed_at_utc
+        ? numeric(current.reference_price) + " · " + time(current.closed_at_utc).slice(5, 16) + " UTC"
+        : "Belum ada sinyal";
+      button.append(node("span", details, "watchlist-meta"));
+      if (current.missing.length) {
+        const status = node("span", "Feed ditunggu", "watchlist-meta wait");
+        status.title = current.missing.join(", ");
+        button.append(status);
+      }
+    } else {
+      button.append(node("span", instruments[name][0], "symbol-code"));
+    }
     button.addEventListener("click", () => {
       if (symbol.value === name) return;
       symbol.value = name;
@@ -182,6 +200,9 @@ function history() {
 
 function render(data) {
   signals = data.signals;
+  watchlistData = data.watchlist ?? {};
+  contextEvents = data.events;
+  renderWatchlist();
   latest(signals[0]);
   history();
   renderSignalChart();
@@ -191,7 +212,13 @@ function render(data) {
     return label;
   });
   byId("feeds").replaceChildren(...feedList);
-  byId("events").replaceChildren(...(data.events.length ? data.events.map((event) => {
+  renderEvents();
+}
+
+function renderEvents() {
+  const filter = byId("event-filter").value;
+  const events = contextEvents.filter((event) => filter === "all" || event.kind === filter || event.impact === filter);
+  byId("events").replaceChildren(...(events.length ? events.map((event) => {
     const item = node("li");
     const info = node("div");
     info.append(node("span", time(event.event_at) + " UTC · " + event.source, "muted"));
@@ -208,17 +235,18 @@ function render(data) {
       item.append(node("span", event.title));
     }
     return item;
-  }) : [node("li", "Tidak ada event relevan dalam rentang pantauan.", "muted")]));
+  }) : [node("li", token ? "Tidak ada event untuk filter ini." : "Buka akses untuk melihat kalender dan berita.", "muted")]));
 }
 
 function clearData() {
   lastSnapshot = "";
   signals = [];
+  contextEvents = [];
   latest();
   history();
   renderSignalChart();
   byId("feeds").replaceChildren();
-  byId("events").replaceChildren(node("li", "Belum ada data.", "muted"));
+  renderEvents();
 }
 
 function connection(text, state = "") {
@@ -229,6 +257,7 @@ function connection(text, state = "") {
 
 function setToken(value) {
   token = value;
+  watchlistData = {};
   try {
     if (value) sessionStorage.setItem(tokenKey, value);
     else sessionStorage.removeItem(tokenKey);
@@ -238,6 +267,7 @@ function setToken(value) {
   byId("access").textContent = token ? "Kelola akses" : "Akses data";
   byId("lock").hidden = !token;
   byId("refresh").hidden = !token || activeTab === "backtest";
+  renderWatchlist();
   clearData();
 }
 
@@ -320,6 +350,7 @@ byId("favorite").addEventListener("click", () => {
 });
 symbol.addEventListener("change", selectInstrument);
 byId("signal-filter").addEventListener("change", history);
+byId("event-filter").addEventListener("change", renderEvents);
 byId("signal-chart-tab").addEventListener("click", () => showChart(false));
 byId("tradingview-tab").addEventListener("click", () => showChart(true));
 window.addEventListener("appearancechange", chart);

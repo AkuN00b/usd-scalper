@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager, closing, suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import asyncio
@@ -19,7 +20,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationErro
 
 from .context import (REFRESH_SECONDS, collect_feeds, evaluate, load_events, missing_providers,
                       parse_time, read_event, stamp)
-from .journal import (ExitInput, JournalError, TradeInput, add_trade, csv_export,
+from .journal import (ExitInput, JournalError, JournalFilters, TradeInput, add_trade, csv_export,
                       initialize_journal, journal_rows, record_exit, summary)
 from .strategy import Features, canonical_symbol, technical, SYMBOLS
 
@@ -281,34 +282,52 @@ def dashboard(request: APIRequest, response: Response, symbol: str = "XAUUSD"):
         rows = db.execute(
             "SELECT id, payload, telegram FROM signals WHERE symbol=? ORDER BY closed DESC LIMIT 50", (symbol,)
         ).fetchall()
+        watchlist = {}
+        for name in SYMBOLS:
+            last = rows[0] if rows and name == symbol else db.execute(
+                "SELECT payload FROM signals WHERE symbol=? ORDER BY closed DESC LIMIT 1", (name,)
+            ).fetchone()
+            signal = json.loads(last["payload"]) if last else {}
+            watchlist[name] = {
+                key: signal.get(key) for key in ("side", "closed_at_utc", "reference_price")
+            } | {"missing": missing_providers(providers, name, now) if config.public_feeds else []}
     return {
         "symbols": SYMBOLS, "symbol": symbol, "feeds": providers,
         "feed_status": "public" if config.public_feeds else "technical_with_optional_csv",
         "missing": missing_providers(providers, symbol, now) if config.public_feeds else [],
         "events": timeline[:20],
+        "watchlist": watchlist,
         "signals": [dict(json.loads(row["payload"]), id=row["id"], telegram=row["telegram"]) for row in rows],
     }
 
 
+def journal_filters(status: Literal["all", "open", "closed"] = "all", side: Literal["all", "BUY", "SELL"] = "all",
+                    start: date | None = None, end: date | None = None) -> JournalFilters:
+    if start is not None and end is not None and start > end:
+        raise HTTPException(422, "Tanggal awal harus sebelum atau sama dengan tanggal akhir.")
+    return JournalFilters(status, side, start, end)
+
+
 @app.get("/api/journal", dependencies=[Depends(access)])
-def journal(request: APIRequest, response: Response, symbol: str = "XAUUSD", page: int = Query(1, ge=1)):
+def journal(request: APIRequest, response: Response, symbol: str = "XAUUSD", page: int = Query(1, ge=1),
+            filters: JournalFilters = Depends(journal_filters)):
     symbol = symbol_or_422(symbol)
     response.headers["Cache-Control"] = "no-store"
     with closing(connect(request.app.state.config.database)) as db, db:
         db.execute("BEGIN")
-        stats = summary(db, symbol)
+        stats = summary(db, symbol, filters)
         page_size = 100
         pages = max(1, (stats["total"] + page_size - 1) // page_size)
         page = min(page, pages)
-        trades = list(journal_rows(db, symbol, page_size, (page - 1) * page_size))
+        trades = list(journal_rows(db, symbol, page_size, (page - 1) * page_size, filters))
         return {"symbol": symbol, "summary": stats, "trades": trades, "page": page, "pages": pages}
 
 
 @app.get("/api/journal/export.csv", dependencies=[Depends(access)])
-def export_journal(request: APIRequest, symbol: str = "XAUUSD"):
+def export_journal(request: APIRequest, symbol: str = "XAUUSD", filters: JournalFilters = Depends(journal_filters)):
     symbol = symbol_or_422(symbol)
     with closing(connect(request.app.state.config.database)) as db:
-        content = csv_export(journal_rows(db, symbol))
+        content = csv_export(journal_rows(db, symbol, filters=filters))
     return Response(content, media_type="text/csv", headers={
         "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="journal-{symbol}.csv"',
     })

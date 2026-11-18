@@ -9,6 +9,7 @@ window.tradeJournal = (() => {
   let listRequest;
   let currentInstrument = "";
   let currentPage = 1;
+  let appliedFilters = {};
 
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   document.querySelectorAll(".form-zone").forEach((label) => { label.textContent = "(" + zone + ")"; });
@@ -30,9 +31,13 @@ window.tradeJournal = (() => {
     return time(value?.replace(/\.0+Z$/, "Z"));
   }
 
-  function price(input) {
+  function numberField(input) {
     const field = byId(input);
     return field.value === "" ? null : field.valueAsNumber;
+  }
+
+  function money(value, currency) {
+    return Number.isFinite(value) ? numeric(value, 4) + " " + currency : "—";
   }
 
   async function request(path, options = {}) {
@@ -60,6 +65,7 @@ window.tradeJournal = (() => {
       node("td", journalTime(trade.opened_at)), node("td", trade.side, trade.side.toLowerCase()),
       node("td", numeric(trade.entry, 9)), node("td", journalTime(trade.exited_at)),
       node("td", numeric(trade.exit_price, 9)), node("td", numeric(trade.gross_r, 2)),
+      node("td", money(trade.net_pnl, trade.pnl_currency), trade.net_pnl > 0 ? "buy" : trade.net_pnl < 0 ? "sell" : ""),
     );
     const info = node("td");
     const reference = trade.signal_at ? "Sinyal " + journalTime(trade.signal_at) + " UTC · skor " + trade.signal_score : "";
@@ -67,8 +73,16 @@ window.tradeJournal = (() => {
     const initial = [];
     if (trade.stop !== null) initial.push("SL awal " + numeric(trade.stop, 9));
     if (trade.target !== null) initial.push("TP awal " + numeric(trade.target, 9));
+    if (trade.lots != null) initial.push("Lot " + numeric(trade.lots, 8));
+    if (Number.isFinite(trade.entry_slippage_price)) {
+      initial.push("Referensi " + numeric(trade.signal_reference, 9),
+        "Selisih fill " + numeric(trade.entry_slippage_price, 9) + " (positif berarti fill kurang menguntungkan)");
+    }
+    const amounts = [];
+    if (trade.gross_pnl != null) amounts.push("P/L sebelum biaya " + money(trade.gross_pnl, trade.pnl_currency));
+    if (trade.costs != null) amounts.push("Biaya " + money(trade.costs, trade.pnl_currency));
     const notes = [
-      reference, trade.signal_reasons.join(" "), initial.join(" · "),
+      reference, trade.signal_reasons.join(" "), initial.join(" · "), amounts.join(" · "),
       trade.notes && "Entry · " + trade.notes, trade.exit_notes && "Exit · " + trade.exit_notes,
     ].filter(Boolean);
     if (notes.length) {
@@ -96,11 +110,12 @@ window.tradeJournal = (() => {
     byId("journal-pages").hidden = true;
     byId("journal-summary").replaceChildren();
     setText("journal-status", message);
-    byId("journal-rows").replaceChildren(emptyRow(8, "Belum ada data untuk ditampilkan."));
+    byId("journal-rows").replaceChildren(emptyRow(9, "Belum ada data untuk ditampilkan."));
   }
 
   async function refresh() {
     listRequest?.abort();
+    byId("journal-filters").hidden = !token;
     if (!token) {
       resetList("Buka akses dashboard untuk melihat jurnal.");
       return;
@@ -113,7 +128,7 @@ window.tradeJournal = (() => {
         currentInstrument = symbol.value;
         currentPage = 1;
       }
-      const params = new URLSearchParams({ symbol: currentInstrument, page: currentPage });
+      const params = new URLSearchParams({ symbol: currentInstrument, page: currentPage, ...appliedFilters });
       const response = await request("/api/journal?" + params, {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
       });
@@ -123,15 +138,20 @@ window.tradeJournal = (() => {
       byId("journal-summary").replaceChildren(
         metric("Posisi terbuka", summary.total - summary.closed), metric("Trade ditutup", summary.closed),
         metric("Win rate bruto", win), metric("R bruto rata-rata", numeric(summary.mean_gross_r, 2)),
+        metric("R bruto total", numeric(summary.total_gross_r, 2)),
+        ...(summary.net_by_currency ?? []).map(({ currency, net, trades }) =>
+          metric("P/L bersih · " + trades + " trade", money(net, currency))),
       );
-      setText("journal-status", summary.r_count ? "R dihitung dari " + summary.r_count + " trade ditutup yang punya SL awal." : "");
+      const message = [summary.total + " trade sesuai filter"];
+      if (summary.r_count) message.push("R dari " + summary.r_count + " trade dengan SL awal");
+      setText("journal-status", message.join(" · "));
       currentPage = page;
       byId("journal-pages").hidden = pages <= 1;
       byId("journal-prev").disabled = page <= 1;
       byId("journal-next").disabled = page >= pages;
       setText("journal-page", "Halaman " + page + " dari " + pages);
       byId("journal-rows").replaceChildren(...(trades.length ? trades.map(renderRow)
-        : [emptyRow(8, "Belum ada trade untuk instrumen ini.")]));
+        : [emptyRow(9, "Tidak ada trade sesuai filter.")]));
       byId("journal-export").disabled = !summary.total;
     } catch (error) {
       if (!controller.signal.aborted) resetList(error.message);
@@ -158,6 +178,7 @@ window.tradeJournal = (() => {
 
   function openExit(trade) {
     byId("exit-form").reset();
+    byId("exit-costs").closest("details").open = false;
     chosenTrade = trade;
     byId("exit-at").value = localTime();
     setText("exit-trade", trade.symbol + " · " + trade.side + " · entry " + numeric(trade.entry, 9));
@@ -192,24 +213,45 @@ window.tradeJournal = (() => {
   wireForm("entry", entryDialog, () => request("/api/journal", {
     method: "POST", body: JSON.stringify({
       request_id: entryRequestId, symbol: byId("entry-symbol").value, side: byId("entry-side").value,
-      opened_at: utcTime("entry-at"), entry: price("entry-price"),
-      stop: price("entry-stop"), target: price("entry-target"),
+      opened_at: utcTime("entry-at"), entry: numberField("entry-price"),
+      stop: numberField("entry-stop"), target: numberField("entry-target"), lots: numberField("entry-lots"),
       signal_id: chosenSignal?.id ?? null, notes: byId("entry-notes").value,
     }),
   }));
   wireForm("exit", exitDialog, () => request("/api/journal/" + chosenTrade.id + "/exit", {
     method: "PUT", body: JSON.stringify({
-      exited_at: utcTime("exit-at"), exit_price: price("exit-price"), exit_notes: byId("exit-notes").value,
+      exited_at: utcTime("exit-at"), exit_price: numberField("exit-price"), exit_notes: byId("exit-notes").value,
+      gross_pnl: numberField("exit-gross"), costs: numberField("exit-costs"),
+      pnl_currency: byId("exit-currency").value.trim().toUpperCase() || null,
     }),
   }));
 
   byId("journal-prev").addEventListener("click", () => { currentPage -= 1; refresh(); });
   byId("journal-next").addEventListener("click", () => { currentPage += 1; refresh(); });
   byId("journal-new").addEventListener("click", () => openEntry());
+  byId("journal-filters").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const start = byId("journal-start").value;
+    const end = byId("journal-end").value;
+    if (start && end && start > end) {
+      setText("journal-status", "Tanggal awal harus sebelum atau sama dengan tanggal akhir.");
+      return;
+    }
+    appliedFilters = { status: byId("journal-state").value, side: byId("journal-side").value };
+    if (start) appliedFilters.start = start;
+    if (end) appliedFilters.end = end;
+    currentPage = 1;
+    refresh();
+  });
+  byId("journal-filters").addEventListener("reset", () => {
+    appliedFilters = {};
+    currentPage = 1;
+    refresh();
+  });
   byId("journal-export").addEventListener("click", async () => {
     const instrument = symbol.value;
     try {
-      const response = await request("/api/journal/export.csv?" + new URLSearchParams({ symbol: instrument }));
+      const response = await request("/api/journal/export.csv?" + new URLSearchParams({ symbol: instrument, ...appliedFilters }));
       const url = URL.createObjectURL(await response.blob());
       const link = node("a");
       link.href = url;
