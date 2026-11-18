@@ -12,6 +12,7 @@ const instruments = {
 };
 const pages = {
   live: ["Pantauan market", "Arah M15 · Keputusan M3"],
+  overview: ["Ringkasan", "Aktivitas sinyal, jurnal, dan kesehatan layanan"],
   backtest: ["Backtest", "Hasil simulasi dan rincian transaksi"],
   journal: ["Jurnal trade", "Catat entry dan exit aktual dari Exness"],
 };
@@ -24,6 +25,8 @@ try {
 let signals = [];
 let watchlistData = {};
 let contextEvents = [];
+let reviewSignals = [];
+let reviewIndex = 0;
 let activeRequest;
 let lastSnapshot = "";
 let activeTab = "live";
@@ -63,6 +66,17 @@ function metric(label, value) {
   const item = node("dl", undefined, "metric");
   item.append(node("dt", label), node("dd", value));
   return item;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = node("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function safeLink(url) {
@@ -170,6 +184,27 @@ function latest(signal) {
   record.onclick = record.hidden ? null : () => window.tradeJournal.openEntry(signal);
 }
 
+function showReviewedSignal() {
+  const signal = reviewSignals[reviewIndex];
+  const position = (reviewIndex + 1) + " / " + reviewSignals.length;
+  setText("signal-review-info", signal.symbol + " · " + signal.side + " · " + signal.score + "/100 · "
+    + time(signal.closed_at_utc) + " UTC · " + position);
+  byId("signal-review-levels").replaceChildren(
+    metric("Referensi", numeric(signal.reference_price)), metric("Stop", numeric(signal.stop)), metric("Target", numeric(signal.target)),
+  );
+  byId("signal-review-reasons").replaceChildren(...signal.reasons.map((reason) => node("li", reason)));
+  byId("signal-review-older").disabled = reviewIndex >= reviewSignals.length - 1;
+  byId("signal-review-newer").disabled = reviewIndex === 0;
+}
+
+function closeSignalReview() {
+  byId("signal-review-dialog").close();
+  reviewSignals = [];
+  setText("signal-review-info", "");
+  byId("signal-review-levels").replaceChildren();
+  byId("signal-review-reasons").replaceChildren();
+}
+
 function history() {
   const filter = byId("signal-filter").value;
   const rows = signals.filter((signal) => filter === "all" || signal.side === filter ||
@@ -186,6 +221,15 @@ function history() {
     const cell = node("td");
     const details = node("details");
     details.append(node("summary", "Lihat"), node("p", signal.reasons.join(" ")));
+    const review = node("button", "Tinjau sinyal");
+    review.type = "button";
+    review.addEventListener("click", () => {
+      reviewSignals = rows;
+      reviewIndex = rows.indexOf(signal);
+      showReviewedSignal();
+      byId("signal-review-dialog").showModal();
+    });
+    details.append(review);
     if (signal.side === "BUY" || signal.side === "SELL") {
       const record = node("button", "Catat entry");
       record.type = "button";
@@ -257,6 +301,8 @@ function connection(text, state = "") {
 
 function setToken(value) {
   token = value;
+  window.systemOverview?.clear();
+  closeSignalReview();
   watchlistData = {};
   try {
     if (value) sessionStorage.setItem(tokenKey, value);
@@ -309,12 +355,14 @@ function showTab(tab) {
   }
   setText("page-title", pages[tab][0]);
   setText("page-description", pages[tab][1]);
+  byId("instrument-control").hidden = tab === "overview";
   byId("refresh").hidden = !token || tab === "backtest";
   if (tab === "live") {
     chart();
     refresh();
   }
   if (tab === "journal") window.tradeJournal.refresh();
+  if (tab === "overview") window.systemOverview.refresh();
 }
 
 byId("access").addEventListener("click", () => dialog.showModal());
@@ -336,11 +384,13 @@ byId("token-form").addEventListener("submit", (event) => {
   connection("Memuat data…");
   refresh();
   if (activeTab === "journal") window.tradeJournal.refresh();
+  if (activeTab === "overview") window.systemOverview.refresh();
 });
 byId("refresh").addEventListener("click", () => {
   connection("Memuat data…");
   refresh();
   if (activeTab === "journal") window.tradeJournal.refresh();
+  if (activeTab === "overview") window.systemOverview.refresh();
 });
 byId("favorite").addEventListener("click", () => {
   const favorites = dashboardPreferences.state.favorites;
@@ -350,6 +400,14 @@ byId("favorite").addEventListener("click", () => {
 });
 symbol.addEventListener("change", selectInstrument);
 byId("signal-filter").addEventListener("change", history);
+byId("signal-review-older").addEventListener("click", () => {
+  reviewIndex += 1;
+  showReviewedSignal();
+});
+byId("signal-review-newer").addEventListener("click", () => {
+  reviewIndex -= 1;
+  showReviewedSignal();
+});
 byId("event-filter").addEventListener("change", renderEvents);
 byId("signal-chart-tab").addEventListener("click", () => showChart(false));
 byId("tradingview-tab").addEventListener("click", () => showChart(true));

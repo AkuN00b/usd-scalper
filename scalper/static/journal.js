@@ -252,14 +252,7 @@ window.tradeJournal = (() => {
     const instrument = symbol.value;
     try {
       const response = await request("/api/journal/export.csv?" + new URLSearchParams({ symbol: instrument, ...appliedFilters }));
-      const url = URL.createObjectURL(await response.blob());
-      const link = node("a");
-      link.href = url;
-      link.download = "journal-" + instrument + ".csv";
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadBlob(await response.blob(), "journal-" + instrument + ".csv");
     } catch (error) {
       setText("journal-status", error.message);
     }

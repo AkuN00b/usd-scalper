@@ -194,6 +194,8 @@ tbody tr:last-child td { border-bottom: 0; }
 details { max-width: 24rem; min-width: 4rem; }
 details summary { color: var(--accent); }
 details p { margin: .45rem 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+#history details button + button { margin-inline-start: .3rem; }
+#signal-review-levels { padding-inline: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .feeds, .events { list-style: none; margin: 0; padding: .7rem .95rem; font-size: .82rem; }
 .feeds { display: flex; flex-wrap: wrap; gap: .35rem; border-bottom: 1px solid var(--edge); }
 .feeds:empty { display: none; }
@@ -219,6 +221,13 @@ details p { margin: .45rem 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .report-compare .report-controls { margin-top: .8rem; }
 .report-compare p:empty { display: none; }
 .report-compare .table-wrap { margin-top: .65rem; max-height: none; border: 1px solid var(--edge); border-radius: 8px; }
+.overview-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; margin-top: 1rem; }
+.overview-panels td { white-space: nowrap; }
+.overview-panels td[colspan], .overview-panels .feed-detail { white-space: normal; }
+.overview-panels .feed-detail { max-width: 16rem; overflow-wrap: anywhere; }
+.overview-panels .feed-detail details { margin-top: .3rem; font-size: .75rem; }
+.overview-panels td button { padding: .25rem .42rem; }
+.overview-panels #overview-backup-status { padding-top: 0; }
 #equity-legend { display: flex; gap: 1rem; flex-wrap: wrap; }
 #equity-legend span::before { content: ""; display: inline-block; width: .9rem; margin-right: .35rem; vertical-align: middle; border-top: 2px solid var(--accent); }
 #equity-legend .legend-b::before { border-top: 2px dashed var(--compare); }
@@ -259,6 +268,7 @@ dialog label input, dialog label select, dialog label textarea { margin-top: .25
   :root { --chart-size: 260px; }
   :root[data-compact="true"] { --chart-size: 205px; }
   .grid { grid-template-columns: minmax(0, 1fr); }
+  .overview-panels { grid-template-columns: minmax(0, 1fr); }
   .page-header { align-items: start; flex-direction: column; }
   .sidebar .tabs { order: 1; width: 100%; }
   .tabs button { width: auto; padding-inline: .4rem; }

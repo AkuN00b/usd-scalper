@@ -27,7 +27,8 @@ Untuk perintah backtest dan pengujian di bawah, jalankan `python` dari virtual e
 
 ### Pakai dashboard
 
-- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi.
+- **Pantauan market.** Klik **Favorit** untuk mengatur watchlist. Setelah membuka akses, setiap favorit menampilkan keputusan terakhir, waktu, harga referensi, dan pemberitahuan jika feed wajib tertahan. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA. Kalender dapat difilter ke agenda, berita, atau dampak tinggi. Gunakan **Lihat → Tinjau sinyal** di riwayat untuk menelusuri keputusan sesuai filter.
+- **Ringkasan.** Review 7, 30, atau 90 hari UTC untuk semua instrumen dalam satu halaman. Lihat aktivitas sinyal, trade yang ditutup per minggu, P/L bersih per mata uang, selisih fill per instrumen, kesehatan feed, status Telegram, dan backup SQLite.
 - **Tampilan.** Pilih tema terang, gelap, atau sesuai sistem. Lo juga bisa mengubah aksen warna, merapatkan tabel, dan menyembunyikan kalender. Pilihan tersebut, instrumen terakhir, dan watchlist disimpan per browser dan alamat dashboard.
 - **Backtest.** Pilih contoh XAUUSD atau EURUSD, atau gunakan **Buka report.json**. **Bandingkan dengan laporan lain** menambahkan tabel metrik serta garis kedua pada grafik R kumulatif. Grafik memakai urutan transaksi masing-masing laporan. Filter sisi dan pemicu exit berlaku pada tabel transaksi utama. File pilihan dibaca di browser.
 - **Jurnal trade.** Catat fill, lot, dan biaya aktual. Filter status, sisi, dan tanggal entry UTC berlaku untuk tabel, ringkasan, serta CSV per instrumen.
@@ -110,3 +111,9 @@ Jurnal tersimpan bersama sinyal di database lokal yang ditunjuk `DB_PATH`. Saat 
 ```sh
 python -m unittest discover -s tests -v
 ```
+
+## Backup dan pemulihan
+
+Buka akses dashboard, lalu pilih **Ringkasan → Unduh backup SQLite**. Snapshot bisa diunduh saat server aktif dan mencakup sinyal serta jurnal yang sudah tersimpan. Simpan hasilnya di tempat yang lo pilih. Konfigurasi `.env` dikelola terpisah.
+
+Untuk backup harian otomatis, set `AUTO_BACKUP=1` di `.env` lalu restart. Saat aplikasi berjalan, aplikasi membuat satu backup per tanggal UTC dan menyimpan tujuh backup otomatis terakhir di subfolder `backups` di sebelah file yang ditunjuk `DB_PATH`. Tab Ringkasan menunjukkan waktu backup otomatis terakhir atau pesan gagal. [Uji pemulihan](MANUAL_SETUP.md#6-backup-dan-uji-pemulihan)

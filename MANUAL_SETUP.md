@@ -26,10 +26,11 @@ Buka file konfigurasi dengan `notepad .env`. Di dashboard, pilih **Akses data** 
 | `WEBHOOK_TOKEN` | Token untuk menerima alert TradingView. Gunakan 32–128 karakter heksadesimal huruf kecil yang berbeda dari token dashboard. Kedua token dibutuhkan saat server mulai. |
 | `DB_PATH` | Lokasi SQLite. Pakai `data/scalper.sqlite3` atau lokasi database yang sudah berisi riwayat lo. |
 | `ENABLE_PUBLIC_FEEDS` | `1` untuk kalender dan berita otomatis. `0` untuk mode teknikal dengan CSV konteks opsional. |
+| `AUTO_BACKUP` | Opsional. Isi `1` untuk menyimpan satu backup per hari UTC saat aplikasi berjalan. Backup otomatis menyimpan tujuh file terakhir. |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Opsional. Isi keduanya untuk notifikasi, atau kosongkan keduanya. |
 | `CONTEXT_CSV` | Opsional. Isi jalur CSV kalau lo punya tambahan agenda atau berita. Gunakan [format contoh](examples/context.csv). |
 
-Restart server setelah mengubah `.env`. Simpan file tersebut secara lokal. Untuk salinan cadangan sederhana, hentikan server sebelum menyalin file SQLite yang ditunjuk `DB_PATH`.
+Restart server setelah mengubah `.env`. Simpan file tersebut secara lokal. Cadangan database dapat diunduh dari tab **Ringkasan**.
 
 ## 2. Sinyal otomatis dari TradingView
 
@@ -105,5 +106,17 @@ for chat_id in chat_ids:
 ## 5. Backtest dari data sendiri
 
 Siapkan simbol, periode, data harga, dan asumsi biaya. Pilih arsip tick Exness untuk bid/ask historis, atau CSV M1/M3 dari MT5 dengan zona waktu sumber dan spread. Setelah CLI selesai, buka `report.json` di dashboard. Gunakan **Bandingkan dengan laporan lain** untuk membandingkan hasil dan grafik dengan contoh atau file kedua. CSV konteks historis opsional memerlukan waktu event dan waktu ketika informasinya tersedia. [Perintah backtest dan format laporan](README.md#backtest-dengan-tick-exness)
+
+## 6. Backup dan uji pemulihan
+
+1. Pilih **Ringkasan → Unduh backup SQLite**. Kalau mengaktifkan backup otomatis, lihat subfolder `backups` di samping database saat ingin mengambil salinannya.
+2. Untuk uji pemulihan, salin cadangan ke nama baru di folder `data`, misalnya `data/scalper-restored.sqlite3`. Simpan konfigurasi uji di `data/restore.env` dengan dua token yang berbeda, isi `DB_PATH=data/scalper-restored.sqlite3`, set `ENABLE_PUBLIC_FEEDS=0` dan `AUTO_BACKUP=0`, lalu kosongkan dua pengaturan Telegram.
+3. Dari PowerShell baru, jalankan server uji dari folder repo:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m uvicorn scalper.server:app --env-file data/restore.env --host 127.0.0.1 --port 8001 --no-access-log
+   ```
+
+   Buka alamat uji, masuk dengan token dashboard dari `data/restore.env`, dan cek riwayat sinyal serta jurnal. Setelah diverifikasi, gunakan jalur salinan yang sudah diuji sebagai `DB_PATH` di konfigurasi utama jika ingin beralih ke database tersebut. [Dashboard uji pemulihan](http://127.0.0.1:8001/)
 
 Kalau lo cuma mau menjalankan dashboard atau jurnal lokal, cukup selesaikan bagian pertama. Untuk memastikan jalur sinyal berfungsi, uji satu instrumen sampai keputusan M3 pertama muncul di dashboard, lalu lanjutkan ke Telegram atau instrumen tambahan.

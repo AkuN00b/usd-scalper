@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -17,11 +18,14 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request as A
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from starlette.background import BackgroundTask
 
+from .backup import copy_database, daily_copies, save_daily_copy
 from .context import (REFRESH_SECONDS, collect_feeds, evaluate, load_events, missing_providers,
                       parse_time, read_event, stamp)
 from .journal import (ExitInput, JournalError, JournalFilters, TradeInput, add_trade, csv_export,
                       initialize_journal, journal_rows, record_exit, summary)
+from .overview import overview
 from .strategy import Features, canonical_symbol, technical, SYMBOLS
 
 STATIC = Path(__file__).with_name("static")
@@ -37,6 +41,7 @@ class Config:
     context_csv: Path | None
     telegram_token: str
     telegram_chat_id: str
+    auto_backup: bool = False
 
     @classmethod
     def load(cls):
@@ -53,7 +58,7 @@ class Config:
             raise RuntimeError("Format TELEGRAM_BOT_TOKEN tidak valid.")
         return cls(webhook, dashboard, Path(os.getenv("DB_PATH", "data/scalper.sqlite3")),
                    os.getenv("ENABLE_PUBLIC_FEEDS", "1") == "1", Path(context) if context else None,
-                   telegram_token, telegram_chat_id)
+                   telegram_token, telegram_chat_id, os.getenv("AUTO_BACKUP", "0") == "1")
 
 
 class AlertFeatures(BaseModel):
@@ -119,6 +124,7 @@ def initialize(path):
                 id INTEGER PRIMARY KEY, symbol TEXT NOT NULL, closed TEXT NOT NULL,
                 payload TEXT NOT NULL, telegram TEXT NOT NULL, UNIQUE(symbol, closed)
             );
+            CREATE INDEX IF NOT EXISTS signals_closed ON signals(closed);
             CREATE TABLE IF NOT EXISTS feeds (
                 name TEXT PRIMARY KEY, last_attempt TEXT NOT NULL,
                 success TEXT, error TEXT NOT NULL, events TEXT NOT NULL
@@ -205,17 +211,29 @@ async def recurring(work, delay):
         await asyncio.sleep(delay)
 
 
+def run_backup(app):
+    try:
+        save_daily_copy(app.state.config.database, datetime.now(UTC))
+        app.state.backup_error = False
+    except (OSError, sqlite3.Error) as error:
+        app.state.backup_error = True
+        print(f"Backup SQLite gagal: {type(error).__name__}", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app):
     config = Config.load()
     initialize(config.database)
     app.state.config = config
     app.state.manual_events = load_events(config.context_csv) if config.context_csv else ()
+    app.state.backup_error = False
     tasks = []
     if config.public_feeds:
         tasks.append(asyncio.create_task(recurring(partial(update_feeds, config.database), REFRESH_SECONDS)))
     if config.telegram_token:
         tasks.append(asyncio.create_task(recurring(partial(notify_telegram, config), 3)))
+    if config.auto_backup:
+        tasks.append(asyncio.create_task(recurring(partial(run_backup, app), 900)))
     try:
         yield
     finally:
@@ -254,6 +272,40 @@ def backtest_example(symbol: str):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/overview", dependencies=[Depends(access)])
+def dashboard_overview(request: APIRequest, response: Response, days: int = Query(7, ge=1, le=90)):
+    response.headers["Cache-Control"] = "no-store"
+    config = request.app.state.config
+    with closing(connect(config.database)) as db, db:
+        db.execute("BEGIN")
+        data = overview(db, days, datetime.now(UTC), public_feeds=config.public_feeds,
+                        telegram_enabled=bool(config.telegram_token))
+    backups = {"enabled": config.auto_backup, "latest": None, "error": request.app.state.backup_error}
+    try:
+        files = daily_copies(config.database)
+        if files:
+            backups["latest"] = stamp(datetime.fromtimestamp(files[0].stat().st_mtime, UTC))
+    except OSError:
+        backups["error"] = True
+    return dict(data, backups=backups)
+
+
+@app.get("/api/maintenance/backup", dependencies=[Depends(access)])
+def download_backup(request: APIRequest):
+    folder = TemporaryDirectory(prefix="usd-scalper-backup-")
+    filename = f"usd-scalper-{datetime.now(UTC):%Y%m%d-%H%M%S}-utc.sqlite3"
+    path = Path(folder.name) / filename
+    try:
+        copy_database(request.app.state.config.database, path)
+    except (OSError, sqlite3.Error):
+        folder.cleanup()
+        raise HTTPException(503, "Backup SQLite gagal dibuat. Coba lagi.") from None
+    return FileResponse(
+        path, filename=filename, media_type="application/vnd.sqlite3",
+        headers={"Cache-Control": "no-store"}, background=BackgroundTask(folder.cleanup),
+    )
 
 
 def symbol_or_422(symbol: str) -> str:
