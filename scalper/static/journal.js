@@ -54,12 +54,6 @@ window.tradeJournal = (() => {
     return response;
   }
 
-  function stat(label, value) {
-    const metric = node("dl", undefined, "metric");
-    metric.append(node("dt", label), node("dd", value));
-    return metric;
-  }
-
   function renderRow(trade) {
     const row = node("tr");
     row.append(
@@ -127,8 +121,8 @@ window.tradeJournal = (() => {
       if (controller.signal.aborted) return;
       const win = summary.gross_win_rate === null ? "—" : numeric(summary.gross_win_rate * 100, 1) + "%";
       byId("journal-summary").replaceChildren(
-        stat("Posisi terbuka", summary.total - summary.closed), stat("Trade ditutup", summary.closed),
-        stat("Win rate bruto", win), stat("R bruto rata-rata", numeric(summary.mean_gross_r, 2)),
+        metric("Posisi terbuka", summary.total - summary.closed), metric("Trade ditutup", summary.closed),
+        metric("Win rate bruto", win), metric("R bruto rata-rata", numeric(summary.mean_gross_r, 2)),
       );
       setText("journal-status", summary.r_count ? "R dihitung dari " + summary.r_count + " trade ditutup yang punya SL awal." : "");
       currentPage = page;

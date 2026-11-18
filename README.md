@@ -6,22 +6,29 @@ Eksekusi di akun Exness tetap manual. Sistem menyarankan level Stop Loss dan Tak
 
 ## Jalankan dashboard
 
-Perlu Python 3.12 atau lebih baru. Dari folder proyek, buat virtual environment dan aktifkan dengan perintah sesuai sistem operasi.
+Perlu Python 3.12 atau lebih baru. Dashboard memakai HTML, CSS, dan JavaScript bawaan browser. Jalankan perintah berikut dari folder repo di PowerShell.
 
-```sh
+```powershell
 python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (-not (Test-Path -LiteralPath .env)) {
+    .\.venv\Scripts\python.exe -c "from pathlib import Path; import secrets; config=Path('.env.example').read_text(); config=config.replace('WEBHOOK_TOKEN=', 'WEBHOOK_TOKEN='+secrets.token_hex(24)).replace('DASHBOARD_TOKEN=', 'DASHBOARD_TOKEN='+secrets.token_hex(24)); Path('.env').open('x', encoding='utf-8').write(config)"
+}
+.\.venv\Scripts\python.exe -m uvicorn scalper.server:app --env-file .env --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
-- Linux atau macOS — `source .venv/bin/activate`
-- Windows PowerShell — `.\.venv\Scripts\Activate.ps1`
+Di Linux atau macOS, gunakan `python3 -m venv .venv` dan ganti `.\.venv\Scripts\python.exe` dengan `.venv/bin/python`. Jalankan baris pembuat token secara langsung saat `.env` belum ada.
 
-```sh
-python -m pip install -r requirements.txt
-python -c "from pathlib import Path; import secrets; p=Path('.env'); text=Path('.env.example').read_text(); text=text.replace('WEBHOOK_TOKEN=', 'WEBHOOK_TOKEN='+secrets.token_hex(24)).replace('DASHBOARD_TOKEN=', 'DASHBOARD_TOKEN='+secrets.token_hex(24)); p.open('x', encoding='utf-8').write(text)"
-python -m uvicorn scalper.server:app --env-file .env --host 127.0.0.1 --port 8000 --no-access-log
-```
+Buka dashboard, klik **Akses data**, lalu masukkan `DASHBOARD_TOKEN` dari `.env`. Di PowerShell, buka file itu dengan `notepad .env`. Gunakan **Kelola akses → Kunci data** untuk mengakhiri akses di tab. Untuk mode teknikal lokal, ubah `ENABLE_PUBLIC_FEEDS=0` di `.env` dan restart server. Hentikan server dengan **Ctrl+C**. [Dashboard lokal](http://127.0.0.1:8000/)
 
-Buka dashboard, klik **Akses data**, lalu masukkan `DASHBOARD_TOKEN` dari `.env`. Perintah pembuat `.env` berhenti jika file itu sudah ada. Simpan kedua token di `.env`, yang dikecualikan oleh Git. [Dashboard lokal](http://127.0.0.1:8000/)
+Untuk perintah backtest dan pengujian di bawah, jalankan `python` dari virtual environment yang sama. Di PowerShell lo bisa mengganti `python` dengan `.\.venv\Scripts\python.exe`. Di Linux atau macOS, gunakan `.venv/bin/python`.
+
+### Pakai dashboard
+
+- **Pantauan market.** Pilih instrumen di bagian atas atau dari **Watchlist**. Klik **Favorit** untuk menambah atau menghapus instrumen yang sedang dipilih. Grafik **Harga sinyal** memakai harga referensi dari riwayat keputusan M3. Pilih **TradingView** untuk memuat chart OANDA.
+- **Tampilan.** Pilih tema terang, gelap, atau sesuai sistem. Lo juga bisa mengubah aksen warna, merapatkan tabel, dan menyembunyikan kalender. Pilihan tersebut, instrumen terakhir, dan watchlist disimpan per browser dan alamat dashboard.
+- **Backtest.** Pilih contoh XAUUSD atau EURUSD untuk mencoba tanpa akun TradingView atau token dashboard. Untuk laporan sendiri, gunakan **Buka report.json**. File pilihan dibaca di browser. Grafik menunjukkan R kumulatif untuk seluruh laporan dan filter sisi berlaku pada tabel transaksi.
+- **Jurnal trade.** Buka akses untuk mencatat dan menutup trade aktual, melihat statistik bruto, serta mengekspor CSV per instrumen.
 
 ## Hubungkan TradingView
 
@@ -94,7 +101,7 @@ Jurnal tersimpan bersama sinyal di database lokal yang ditunjuk `DB_PATH`. Saat 
 ## Telegram dan GitHub
 
 - **Telegram.** Buat bot lewat BotFather, lalu buka chat dengan bot dan mulai percakapan. Isi `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` di `.env`, lalu restart aplikasi. Status pengiriman tampil di dashboard. Webhook tidak menunggu Telegram. [Telegram Bot API](https://core.telegram.org/bots/api)
-- **GitHub.** Isi ZIP bisa langsung dimasukkan ke repo GitHub. Workflow `.github/workflows/check.yml` menjalankan pengujian setiap push dan pull request. Untuk menerima webhook tetap diperlukan aplikasi yang berjalan di laptop dengan tunnel HTTPS atau layanan hosting.
+- **GitHub.** Workflow `.github/workflows/check.yml` menjalankan pengujian setiap push dan pull request. Aplikasi perlu berjalan di laptop dengan tunnel HTTPS atau di layanan hosting untuk menerima webhook live. [Langkah berikutnya](NEXT_STEPS.md)
 
 ```sh
 python -m unittest discover -s tests -v

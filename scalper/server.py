@@ -24,6 +24,7 @@ from .journal import (ExitInput, JournalError, TradeInput, add_trade, csv_export
 from .strategy import Features, canonical_symbol, technical, SYMBOLS
 
 STATIC = Path(__file__).with_name("static")
+BACKTEST_EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "backtests"
 
 
 @dataclass(frozen=True)
@@ -237,6 +238,16 @@ def access(request: APIRequest, authorization: str = Header(default="")):
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/backtest/examples/{symbol}")
+def backtest_example(symbol: str):
+    if symbol not in {"XAUUSD", "EURUSD"}:
+        raise HTTPException(404, "Contoh backtest tidak tersedia.")
+    path = BACKTEST_EXAMPLES / symbol.lower() / "report.json"
+    if not path.is_file():
+        raise HTTPException(404, "Contoh backtest tidak tersedia.")
+    return FileResponse(path, media_type="application/json")
 
 
 @app.get("/health")

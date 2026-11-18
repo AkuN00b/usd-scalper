@@ -3,10 +3,32 @@
 const byId = (id) => document.getElementById(id);
 const symbol = byId("symbol");
 const dialog = byId("token-dialog");
-let token = sessionStorage.getItem("usd-scalper-token") || "";
+const tokenKey = "usd-scalper-token";
+const instruments = {
+  XAUUSD: ["Emas", "Emas / Dolar AS"], EURUSD: ["Euro", "Euro / Dolar AS"],
+  GBPUSD: ["Pound", "Pound Inggris / Dolar AS"], USDJPY: ["Yen", "Dolar AS / Yen Jepang"],
+  USDCHF: ["Franc", "Dolar AS / Franc Swiss"], USDCAD: ["CAD", "Dolar AS / Dolar Kanada"],
+  AUDUSD: ["AUD", "Dolar Australia / Dolar AS"], NZDUSD: ["NZD", "Dolar Selandia Baru / Dolar AS"],
+};
+const pages = {
+  live: ["Pantauan market", "Arah M15 · Keputusan M3"],
+  backtest: ["Backtest", "Hasil simulasi dan rincian transaksi"],
+  journal: ["Jurnal trade", "Catat entry dan exit aktual dari Exness"],
+};
+let token = "";
+try {
+  token = sessionStorage.getItem(tokenKey) || "";
+} catch {
+  // The token can still be used for the current page.
+}
 let signals = [];
 let activeRequest;
 let lastSnapshot = "";
+let activeTab = "live";
+
+const updateSignalChart = lineChart(byId("signal-chart"),
+  (value) => new Date(value).toISOString().slice(5, 16).replace("T", " "),
+  (value) => numeric(value, 6));
 
 function node(tag, content, className) {
   const element = document.createElement(tag);
@@ -35,6 +57,12 @@ function emptyRow(count, text) {
   return row;
 }
 
+function metric(label, value) {
+  const item = node("dl", undefined, "metric");
+  item.append(node("dt", label), node("dd", value));
+  return item;
+}
+
 function safeLink(url) {
   try {
     const target = new URL(url);
@@ -45,14 +73,69 @@ function safeLink(url) {
 }
 
 function chart() {
+  if (byId("live").hidden || byId("tradingview-view").hidden) return;
   const params = new URLSearchParams({
-    symbol: "OANDA:" + symbol.value, interval: "3", theme: "dark",
+    symbol: "OANDA:" + symbol.value, interval: "3", theme: document.documentElement.dataset.theme,
     style: "1", timezone: "Etc/UTC", locale: "en",
     hidesidetoolbar: "1", symboledit: "0", withdateranges: "1", studies: "[]",
   });
-  byId("chart").src = "https://s.tradingview.com/widgetembed/?" + params.toString();
+  const src = "https://s.tradingview.com/widgetembed/?" + params.toString();
+  if (byId("chart").src !== src) byId("chart").src = src;
   byId("chart-link").href = "https://www.tradingview.com/chart/?" + new URLSearchParams({ symbol: params.get("symbol"), interval: "3" });
+}
+
+function showChart(external) {
+  byId("signal-chart-view").hidden = external;
+  byId("tradingview-view").hidden = !external;
+  byId("signal-chart-tab").setAttribute("aria-pressed", String(!external));
+  byId("tradingview-tab").setAttribute("aria-pressed", String(external));
+  chart();
+}
+
+function renderSignalChart() {
+  const points = signals.map((signal) => ({ x: Date.parse(signal.closed_at_utc), y: signal.reference_price }))
+    .filter(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))
+    .sort((first, second) => first.x - second.x);
+  byId("signal-chart").hidden = !points.length;
+  byId("chart-empty").hidden = Boolean(points.length);
+  setText("chart-empty-text", token ? "Belum ada harga sinyal untuk instrumen ini." : "Buka akses untuk melihat harga sinyal.");
+  updateSignalChart(points);
+}
+
+function renderWatchlist() {
+  const favorites = dashboardPreferences.state.favorites;
+  const selected = favorites.includes(symbol.value);
+  const favorite = byId("favorite");
+  favorite.setAttribute("aria-pressed", String(selected));
+  favorite.title = selected ? "Hapus " + symbol.value + " dari favorit" : "Tambahkan " + symbol.value + " ke favorit";
+  const items = byId("watchlist-items");
+  const focused = items.contains(document.activeElement) ? document.activeElement.dataset.symbol : "";
+  const buttons = favorites.map((name) => {
+    const button = node("button", name);
+    button.type = "button";
+    button.dataset.symbol = name;
+    button.setAttribute("aria-pressed", String(name === symbol.value));
+    button.append(node("span", instruments[name][0], "symbol-code"));
+    button.addEventListener("click", () => {
+      if (symbol.value === name) return;
+      symbol.value = name;
+      selectInstrument();
+    });
+    return button;
+  });
+  items.replaceChildren(...(buttons.length ? buttons : [node("p", "Pilih instrumen lalu klik Favorit.", "muted")]));
+  buttons.find((button) => button.dataset.symbol === focused)?.focus();
+}
+
+function selectInstrument() {
+  dashboardPreferences.save({ symbol: symbol.value });
   setText("market-title", symbol.value);
+  setText("market-name", instruments[symbol.value][1]);
+  renderWatchlist();
+  chart();
+  clearData();
+  refresh();
+  if (activeTab === "journal") window.tradeJournal.refresh();
 }
 
 function latest(signal) {
@@ -70,11 +153,15 @@ function latest(signal) {
 }
 
 function history() {
-  const rows = signals.filter((signal) => !byId("actionable").checked || signal.side !== "WAIT");
+  const filter = byId("signal-filter").value;
+  const rows = signals.filter((signal) => filter === "all" || signal.side === filter ||
+    (filter === "actionable" && signal.side !== "WAIT"));
   byId("history").replaceChildren(...(rows.length ? rows.map((signal) => {
     const row = node("tr");
-    row.append(node("td", time(signal.closed_at_utc)), node("td", signal.side, signal.side.toLowerCase()),
-      node("td", signal.score), node("td", {
+    const side = node("td");
+    side.append(node("span", signal.side, "badge " + signal.side.toLowerCase()));
+    row.append(node("td", time(signal.closed_at_utc)), side,
+      node("td", signal.score), node("td", numeric(signal.reference_price)), node("td", {
         off: "—", sent: "Terkirim", failed: "Gagal", queued: "Antre", sending: "Mengirim",
         unknown: "Tidak terkonfirmasi", expired: "Kedaluwarsa",
       }[signal.telegram] ?? "—"));
@@ -90,22 +177,26 @@ function history() {
     cell.append(details);
     row.append(cell);
     return row;
-  }) : [emptyRow(5, "Belum ada sinyal untuk filter ini.")]));
+  }) : [emptyRow(6, token ? "Belum ada sinyal untuk filter ini." : "Buka akses untuk melihat riwayat sinyal.")]));
 }
 
 function render(data) {
   signals = data.signals;
   latest(signals[0]);
   history();
+  renderSignalChart();
   const feedList = Object.entries(data.feeds).map(([name, status]) => {
-    const label = node("li", name + (status.error ? " · gagal" : " · aktif"), status.error ? "wait" : "buy");
+    const label = node("li", name + (status.error ? " · gagal" : " · aktif"), "badge " + (status.error ? "wait" : "buy"));
     if (status.error) label.title = status.error;
     return label;
   });
   byId("feeds").replaceChildren(...feedList);
   byId("events").replaceChildren(...(data.events.length ? data.events.map((event) => {
     const item = node("li");
-    item.append(node("span", time(event.event_at) + " UTC · " + event.source, "muted"));
+    const info = node("div");
+    info.append(node("span", time(event.event_at) + " UTC · " + event.source, "muted"));
+    if (event.impact === "high") info.append(" ", node("span", "Dampak tinggi", "badge wait"));
+    item.append(info);
     const link = safeLink(event.url);
     if (link) {
       const anchor = node("a", event.title);
@@ -125,8 +216,29 @@ function clearData() {
   signals = [];
   latest();
   history();
+  renderSignalChart();
   byId("feeds").replaceChildren();
   byId("events").replaceChildren(node("li", "Belum ada data.", "muted"));
+}
+
+function connection(text, state = "") {
+  const status = byId("connection");
+  if (status.textContent !== text) status.textContent = text;
+  status.dataset.state = state;
+}
+
+function setToken(value) {
+  token = value;
+  try {
+    if (value) sessionStorage.setItem(tokenKey, value);
+    else sessionStorage.removeItem(tokenKey);
+  } catch {
+    // Authentication continues in memory for the current page.
+  }
+  byId("access").textContent = token ? "Kelola akses" : "Akses data";
+  byId("lock").hidden = !token;
+  byId("refresh").hidden = !token || activeTab === "backtest";
+  clearData();
 }
 
 async function refresh() {
@@ -136,14 +248,14 @@ async function refresh() {
   activeRequest = controller;
   try {
     const res = await fetch("/api/dashboard?" + new URLSearchParams({ symbol: symbol.value }), {
-      headers: { Authorization: "Bearer " + token }, signal: controller.signal, cache: "no-store",
+      headers: { Authorization: "Bearer " + token },
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]), cache: "no-store",
     });
+    if (controller.signal.aborted) return;
     if (res.status === 401) {
-      token = "";
-      sessionStorage.removeItem("usd-scalper-token");
-      clearData();
+      setToken("");
       window.tradeJournal?.refresh();
-      setText("connection", "Token dashboard tidak valid");
+      connection("Token dashboard tidak valid", "error");
       return;
     }
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -152,85 +264,78 @@ async function refresh() {
     const snapshot = JSON.stringify(data);
     if (snapshot !== lastSnapshot) render(data);
     lastSnapshot = snapshot;
-    setText("connection", data.missing.length ? "Feed wajib ditunggu · " + data.missing.join(", ") :
-      data.feed_status === "public" ? "Feed wajib siap" : "Mode teknikal / CSV");
+    if (data.missing.length) connection("Feed wajib ditunggu · " + data.missing.join(", "), "notice");
+    else connection(data.feed_status === "public" ? "Feed wajib siap" : "Mode teknikal / CSV", "ready");
   } catch (error) {
-    if (error.name !== "AbortError") setText("connection", "Dashboard gagal mengambil data");
+    if (!controller.signal.aborted) connection("Dashboard gagal mengambil data", "error");
   }
 }
 
 function showTab(tab) {
-  for (const name of ["live", "backtest", "journal"]) {
+  activeTab = tab;
+  for (const name of Object.keys(pages)) {
     byId(name).hidden = name !== tab;
     byId(name + "-tab").setAttribute("aria-pressed", String(name === tab));
+  }
+  setText("page-title", pages[tab][0]);
+  setText("page-description", pages[tab][1]);
+  byId("refresh").hidden = !token || tab === "backtest";
+  if (tab === "live") {
+    chart();
+    refresh();
   }
   if (tab === "journal") window.tradeJournal.refresh();
 }
 
-function report(data) {
-  const stats = data.summary;
-  if (!stats || !Array.isArray(data.trades) || typeof stats.symbol !== "string") {
-    throw new Error("Format report.json tidak sesuai.");
-  }
-  const metrics = [
-    ["Simbol", stats.symbol], ["Transaksi", stats.trade_count],
-    ["Win rate", stats.win_rate === null ? "—" : numeric(stats.win_rate * 100, 1) + "%"],
-    ["Hasil", numeric(stats.total_r, 2) + " R"], ["Drawdown", numeric(stats.max_drawdown_r, 2) + " R"],
-    ["Harga", stats.execution_mode === "exness_ticks" ? "Tick Exness" : "Candle"],
-    ["Konteks", stats.context_mode === "historical_csv" ? "CSV historis" : "Teknikal"],
-  ];
-  byId("report-summary").replaceChildren(...metrics.map(([key, value]) => {
-    const item = node("dl", undefined, "metric");
-    item.append(node("dt", key), node("dd", value));
-    return item;
-  }));
-  const rows = data.trades.slice(0, 1000).map((trade) => {
-    const row = node("tr");
-    const exit = time(trade.exit_at_utc) + (trade.exit_bar_end_utc ? " – " + time(trade.exit_bar_end_utc).slice(-8) : "");
-    const labels = { stop_at_open: "Stop saat open", target_at_open: "Target saat open", time: "Batas waktu",
-      stop_intrabar: "Stop dalam candle", target_intrabar: "Target dalam candle",
-      stop_tick: "Stop pada tick", target_tick: "Target pada tick", end_of_data: "Akhir data" };
-    row.append(node("td", trade.side), node("td", time(trade.signal_at_utc)), node("td", time(trade.entry_at_utc)),
-      node("td", numeric(trade.entry_price)), node("td", exit), node("td", labels[trade.exit_reason] ?? trade.exit_reason),
-      node("td", numeric(trade.r, 3)));
-    return row;
-  });
-  if (data.trades.length > 1000) rows.push(emptyRow(7, "Tampilan dibatasi 1.000 transaksi. Riwayat lengkap ada di trades.csv."));
-  byId("trades").replaceChildren(...(rows.length ? rows : [emptyRow(7, "Tidak ada transaksi dalam periode ini.")]));
-}
-
 byId("access").addEventListener("click", () => dialog.showModal());
 byId("cancel").addEventListener("click", () => dialog.close());
+byId("lock").addEventListener("click", () => {
+  activeRequest?.abort();
+  setToken("");
+  window.tradeJournal.refresh();
+  connection("Akses data diperlukan");
+  dialog.close();
+});
 byId("token-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  token = byId("dashboard-token").value.trim();
-  sessionStorage.setItem("usd-scalper-token", token);
+  const value = byId("dashboard-token").value.trim();
+  if (!value) return;
+  setToken(value);
   byId("dashboard-token").value = "";
   dialog.close();
-  clearData();
+  connection("Memuat data…");
   refresh();
-  if (!byId("journal").hidden) window.tradeJournal.refresh();
+  if (activeTab === "journal") window.tradeJournal.refresh();
 });
-symbol.addEventListener("change", () => {
-  chart();
-  clearData();
+byId("refresh").addEventListener("click", () => {
+  connection("Memuat data…");
   refresh();
-  if (!byId("journal").hidden) window.tradeJournal.refresh();
+  if (activeTab === "journal") window.tradeJournal.refresh();
 });
-byId("actionable").addEventListener("change", history);
-for (const name of ["live", "backtest", "journal"]) {
+byId("favorite").addEventListener("click", () => {
+  const favorites = dashboardPreferences.state.favorites;
+  dashboardPreferences.save({ favorites: favorites.includes(symbol.value)
+    ? favorites.filter((name) => name !== symbol.value) : [...favorites, symbol.value] });
+  renderWatchlist();
+});
+symbol.addEventListener("change", selectInstrument);
+byId("signal-filter").addEventListener("change", history);
+byId("signal-chart-tab").addEventListener("click", () => showChart(false));
+byId("tradingview-tab").addEventListener("click", () => showChart(true));
+window.addEventListener("appearancechange", chart);
+for (const name of Object.keys(pages)) {
   byId(name + "-tab").addEventListener("click", () => showTab(name));
 }
-byId("report-file").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    report(JSON.parse(await file.text()));
-  } catch {
-    setText("report-summary", "File tidak bisa dibaca. Pilih report.json dari CLI backtest.");
-    byId("trades").replaceChildren(emptyRow(7, "Belum ada laporan."));
-  }
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) activeRequest?.abort();
+  else if (activeTab === "live") refresh();
 });
-chart();
-refresh();
-setInterval(refresh, 15000);
+setInterval(() => {
+  if (activeTab === "live" && !document.hidden) refresh();
+}, 15000);
+
+const preferences = dashboardPreferences.state;
+if (Object.hasOwn(instruments, preferences.symbol)) symbol.value = preferences.symbol;
+preferences.favorites = [...new Set(preferences.favorites.filter((name) => typeof name === "string" && Object.hasOwn(instruments, name)))];
+setToken(token);
+selectInstrument();
